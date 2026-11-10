@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Langley Park NAP — Delivery Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --crimson: #8B1A1A; --crimson-dark: #6B1010; --crimson-deep: #3D0000;
+    --gold: #F2C12E; --gold-deep: #B8860B;
+    --paper: #FAF7F2; --paper-raised: #FFFFFF;
+    --ink: #1A0A0A; --ink-soft: #6B4040;
+    --line: #E4D8C8; --line-dark: rgba(255,255,255,.12);
+    --teal: #2E6B52; --teal-tint: #E3F1EA;
+    --amber: #B9791F; --amber-tint: #FBF0DB;
+    --rust: #9C4530; --rust-tint: #F7E2DA;
+    --radius: 5px;
+    box-sizing: border-box;
+  }
+  *,*::before,*::after{ box-sizing:inherit; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{ background:var(--paper); color:var(--ink); font-family:'Open Sans',sans-serif; font-size:14.5px; line-height:1.55; }
+  h1,h2,h3,.display{ font-family:'Montserrat',sans-serif; font-weight:800; }
+  .num{ font-family:'IBM Plex Mono',ui-monospace,monospace; }
+  button{ font-family:inherit; }
+
+  #app{ display:flex; flex-direction:column; min-height:100%; }
+
+  /* ---- Top bar: just the Explore the Evidence entry point ---- */
+  #topbar{ display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:14px 28px; background:var(--paper); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .toplevel-btn{ all:unset; cursor:pointer; padding:9px 18px; border-radius:20px; font-family:'Montserrat',sans-serif; font-size:12.5px; font-weight:700; color:var(--crimson); background:var(--paper-raised); border:1.5px solid var(--crimson); }
+  .toplevel-btn:hover{ background:#F5E6E6; }
+  .toplevel-btn.active{ background:var(--crimson); color:#fff; }
+  .toplevel-pct{ font-family:'IBM Plex Mono',monospace; font-size:11px; margin-left:7px; opacity:.75; }
+
+  #shell{ display:flex; flex:1; min-height:0; }
+
+  /* ---- Sidebar: brand + phases (or, on Explore the Evidence, example questions) ---- */
+  #nav{ width:252px; flex:0 0 252px; background:var(--crimson-deep); color:var(--paper-raised); padding:26px 0 18px; display:flex; flex-direction:column; }
+  .brand{ padding:0 20px 20px; border-bottom:1px solid var(--line-dark); }
+  .brand .eyebrow{ font-family:'Montserrat',sans-serif; font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--gold); text-transform:uppercase; }
+  .brand h1{ font-size:18px; margin:6px 0 2px; line-height:1.25; }
+  .brand .sub{ font-size:12px; color:rgba(255,255,255,.55); }
+  #navBody{ flex:1; }
+  nav.tabs{ padding:12px 8px; display:flex; flex-direction:column; gap:2px; }
+  .tab-btn{ all:unset; cursor:pointer; padding:10px 11px; border-radius:var(--radius); display:flex; align-items:baseline; gap:9px; font-size:13px; color:rgba(255,255,255,.72); }
+  .tab-btn .n{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--gold); opacity:.8; width:16px; flex-shrink:0; }
+  .tab-btn:hover{ background:rgba(255,255,255,.06); }
+  .tab-btn.active{ background:rgba(242,193,46,.14); color:#fff; }
+  .tab-progress{ margin-left:auto; font-size:10.5px; font-family:'IBM Plex Mono',monospace; opacity:.65; }
+  .tab-alert-dot{ width:6px; height:6px; border-radius:50%; flex:0 0 auto; align-self:center; }
+  .tab-alert-dot.overdue{ background:#E1725A; box-shadow:0 0 0 3px rgba(225,114,90,.28); }
+  .tab-alert-dot.upcoming{ background:var(--gold); box-shadow:0 0 0 3px rgba(242,193,46,.24); }
+  .rail-section{ padding:14px 20px 2px; }
+  .rail-section h4{ font-family:'Montserrat',sans-serif; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
+  .rail-q{ all:unset; cursor:pointer; display:block; width:100%; box-sizing:border-box; font-size:12px; line-height:1.4; color:rgba(255,255,255,.78); padding:7px 9px; border-radius:6px; margin-bottom:3px; }
+  .rail-q:hover{ background:rgba(255,255,255,.08); color:#fff; }
+  .nav-note{ padding:12px 20px 0; font-size:11px; color:rgba(255,255,255,.4); line-height:1.5; }
+  .nav-foot{ padding:16px 20px 0; margin-top:auto; border-top:1px solid var(--line-dark); }
+  .save-state{ margin-top:12px; display:flex; align-items:center; gap:7px; font-size:11px; color:rgba(255,255,255,.6); }
+  .dot{ width:6px; height:6px; border-radius:50%; background:#7FBFA0; flex:0 0 auto; }
+  .dot.busy{ background:var(--gold); } .dot.off{ background:#C97A6A; }
+  .nav-actions{ display:flex; gap:12px; margin-top:10px; flex-wrap:wrap; }
+  .nav-actions button, .nav-actions label{ all:unset; cursor:pointer; font-size:11px; color:rgba(255,255,255,.55); text-decoration:underline; text-underline-offset:2px; }
+  .nav-actions button:hover, .nav-actions label:hover{ color:#fff; }
+
+  /* ---- Main ---- */
+  #main{ flex:1; min-width:0; padding:32px 40px 70px; max-width:1000px; }
+  .back-link{ all:unset; cursor:pointer; font-size:12.5px; color:var(--ink-soft); margin-bottom:14px; display:inline-block; }
+  .back-link:hover{ color:var(--crimson); }
+  .page-head{ margin-bottom:24px; }
+  .page-head .kicker{ font-size:12px; color:var(--ink-soft); }
+  .page-head h2{ font-size:24px; margin:4px 0 6px; line-height:1.25; }
+  .page-head .meta{ font-size:13px; color:var(--ink-soft); }
+
+  /* stat strip */
+  .stat-strip{ display:flex; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; margin-bottom:22px; background:var(--paper-raised); }
+  .stat{ flex:1; padding:14px 18px; border-right:1px solid var(--line); }
+  .stat:last-child{ border-right:none; }
+  .stat .label{ font-size:11px; color:var(--ink-soft); }
+  .stat .value{ font-family:'Montserrat',sans-serif; font-size:23px; font-weight:800; margin-top:2px; color:var(--crimson); }
+  .stat .value small{ font-size:12.5px; font-weight:600; font-family:'Open Sans'; color:var(--ink-soft); }
+  .stat .sub{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
+
+  /* journey strip */
+  .journey{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:24px; }
+  .jstage{ all:unset; cursor:pointer; border-radius:var(--radius); padding:10px 12px; background:var(--paper-raised); border:1px solid var(--line); }
+  .jstage:hover{ border-color:var(--crimson); }
+  .jstage-top{ display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+  .jstage-num{ width:20px; height:20px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:700; }
+  .jstage-label{ font-size:11.5px; font-weight:700; font-family:'Montserrat'; line-height:1.25; text-align:left; }
+  .jstage-track{ height:4px; border-radius:2px; background:var(--line); overflow:hidden; }
+  .jstage-fill{ height:100%; background:var(--crimson); }
+  .jstage-count{ font-size:10.5px; color:var(--ink-soft); margin-top:5px; }
+  .jstage-dots{ display:flex; gap:5px; flex-wrap:wrap; margin-top:9px; }
+  .dot-cell{ position:relative; display:inline-flex; }
+  .jm-dot{ width:7px; height:7px; border-radius:50%; }
+  .jm-dot.not_started{ background:var(--line); border:1px solid var(--ink-soft); }
+  .jm-dot.in_progress{ background:var(--amber); }
+  .jm-dot.done{ background:var(--teal); }
+  .jm-dot.decision{ box-shadow:0 0 0 2px var(--paper-raised), 0 0 0 3px var(--gold-deep); }
+  .dot-tip{
+    position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+    background:var(--crimson-deep); color:#fff; font-size:11px; font-weight:500; line-height:1.4;
+    padding:6px 9px; border-radius:4px; width:max-content; max-width:190px; text-align:center;
+    opacity:0; visibility:hidden; transition:opacity .12s ease, transform .12s ease; pointer-events:none; z-index:30;
+  }
+  .dot-cell:hover .dot-tip{ opacity:1; visibility:visible; transform:translateX(-50%) translateY(-4px); }
+
+  /* alerts */
+  .alerts{ margin-bottom:26px; }
+  .alerts h3{ font-size:12.5px; color:var(--ink-soft); font-weight:700; margin-bottom:8px; }
+  .alert-row{ all:unset; display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:var(--radius); margin-bottom:5px; cursor:pointer; font-size:13px; width:100%; box-sizing:border-box; }
+  .alert-row.overdue{ background:var(--rust-tint); }
+  .alert-row.upcoming{ background:var(--amber-tint); }
+  .alert-row .flag{ font-size:10px; letter-spacing:.03em; padding:2px 7px; border-radius:20px; font-weight:700; flex:0 0 auto; }
+  .alert-row.overdue .flag{ background:var(--rust); color:#fff; }
+  .alert-row.upcoming .flag{ background:var(--amber); color:#fff; }
+  .alert-row .a-owner{ color:var(--ink-soft); font-size:11.5px; margin-left:auto; flex:0 0 auto; }
+  .alerts-empty{ font-size:13px; color:var(--ink-soft); padding:6px 2px; }
+
+  /* ledger */
+  .ledger h3{ font-size:12.5px; color:var(--ink-soft); font-weight:700; margin-bottom:6px; }
+  .ledger-row{ all:unset; display:grid; grid-template-columns:20px 1fr 130px; align-items:center; gap:14px; padding:14px 4px; border-bottom:1px solid var(--line); cursor:pointer; width:100%; box-sizing:border-box; }
+  .ledger-row:hover .l-title{ color:var(--crimson); }
+  .ledger-row .l-num{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft); }
+  .ledger-row .l-title{ font-family:'Montserrat',sans-serif; font-size:15px; font-weight:700; }
+  .ledger-row .l-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .prog-track{ height:6px; background:var(--line); border-radius:4px; overflow:hidden; }
+  .prog-fill{ height:100%; background:var(--crimson); }
+  .prog-label{ font-size:10.5px; color:var(--ink-soft); margin-top:4px; font-family:'IBM Plex Mono',monospace; }
+
+  /* stage detail meta */
+  .stage-meta-strip{ display:flex; gap:28px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .stage-meta-strip .m .label{ font-size:10.5px; color:var(--ink-soft); }
+  .stage-meta-strip .m .value{ font-family:'Montserrat',sans-serif; font-size:17px; font-weight:800; }
+  .exit-test{ background:var(--paper-raised); border:1px solid var(--line); border-left:3px solid var(--gold-deep); border-radius:var(--radius); padding:12px 14px; margin-bottom:22px; font-size:12.5px; color:var(--ink-soft); line-height:1.55; }
+  .exit-test strong{ color:var(--ink); }
+
+  /* milestone cards */
+  .ms{ border:1px solid var(--line); border-left-width:4px; border-radius:var(--radius); background:var(--paper-raised); margin-bottom:9px; overflow:hidden; }
+  .ms.not_started{ border-left-color:var(--line-dark); }
+  .ms.in_progress{ border-left-color:var(--amber); }
+  .ms.done{ border-left-color:var(--teal); }
+  .ms.decision{ border-left-color:var(--crimson); }
+  .ms-row{ display:flex; align-items:flex-start; gap:12px; padding:13px 14px; }
+  .status-btn{ all:unset; cursor:pointer; width:21px; height:21px; border-radius:50%; flex:0 0 auto; border:1.5px solid var(--ink-soft); margin-top:2px; position:relative; }
+  .ms.in_progress .status-btn{ border-color:var(--amber); background:linear-gradient(90deg,var(--amber) 50%,transparent 50%); }
+  .ms.done .status-btn{ border-color:var(--teal); background:var(--teal); }
+  .ms.done .status-btn::after{ content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; }
+  .ms-body{ flex:1; min-width:0; }
+  .ms-title-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .ms-title{ font-family:'Montserrat',sans-serif; font-size:14px; font-weight:700; }
+  .ms.done .ms-title{ color:var(--ink-soft); text-decoration:line-through; text-decoration-color:var(--line-dark); }
+
+  /* NAP Workbook tracker -- 4-state status, reusing the milestone card language */
+  .ms.nap-not_started{ border-left-color:var(--line-dark); }
+  .ms.nap-drafted{ border-left-color:var(--amber); }
+  .ms.nap-needs_review{ border-left-color:var(--rust); }
+  .ms.nap-complete{ border-left-color:var(--teal); }
+  .nap-status-btn.nap-status-btn{ background:conic-gradient(var(--line-dark) 0deg); }
+  .ms.nap-not_started .nap-status-btn{ border-color:var(--ink-soft); background:transparent; }
+  .ms.nap-drafted .nap-status-btn{ border-color:var(--amber); background:linear-gradient(90deg,var(--amber) 33%,transparent 33%); }
+  .ms.nap-needs_review .nap-status-btn{ border-color:var(--rust); background:linear-gradient(90deg,var(--rust) 66%,transparent 66%); }
+  .ms.nap-complete .nap-status-btn{ border-color:var(--teal); background:var(--teal); }
+  .ms.nap-complete .nap-status-btn::after{ content:"\2713"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; }
+  .ms.nap-complete .ms-title{ color:var(--ink-soft); }
+  .nap-status-tag{ font-size:10px; font-weight:700; font-family:'Montserrat',sans-serif; padding:2px 8px; border-radius:10px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; }
+  .nap-status-tag.nap-not_started{ background:var(--paper); color:var(--ink-soft); border:1px solid var(--line-dark); }
+  .nap-status-tag.nap-drafted{ background:var(--amber-tint); color:#7A5200; }
+  .nap-status-tag.nap-needs_review{ background:var(--rust-tint); color:var(--rust); }
+  .nap-status-tag.nap-complete{ background:var(--teal-tint); color:var(--teal); }
+  .nap-evidence{ font-size:12px; color:var(--ink); background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; padding:7px 10px; margin:6px 0; line-height:1.45; }
+  .nap-evidence-live{ all:unset; display:block; box-sizing:border-box; width:100%; cursor:pointer; font-size:12px; color:var(--ink); background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; padding:7px 10px; margin:6px 0; line-height:1.45; }
+  .nap-evidence-live:hover{ border-color:var(--crimson); background:#F5E6E6; }
+  .nap-evidence-cta{ display:block; font-weight:700; color:var(--crimson); font-family:'Montserrat',sans-serif; font-size:11px; margin-top:4px; }
+  .note-flag{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--gold); margin-left:7px; vertical-align:middle; }
+  .decision-tag{ font-size:9.5px; letter-spacing:.04em; text-transform:uppercase; font-weight:700; padding:2px 7px; border-radius:3px; background:var(--crimson-deep); color:var(--gold); }
+  .ms-sub{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .ms-owner-row{ display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .owner-chip{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px; }
+  .owner-casa{ background:#FEF0E6; color:#8B3A0A; } .owner-rc{ background:#E6EEF8; color:#1A3A6B; }
+  .owner-coalition{ background:#E8F5E9; color:#1B5E20; } .owner-joint{ background:#F3E5F5; color:#4A0072; }
+  .owner-steering{ background:#FFF9E6; color:#6B4A00; }
+  .owner-wjwi{ background:#E9E4F7; color:#4B3B7A; }
+  .ms-due{ font-size:11px; color:var(--ink-soft); margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+  .ms-due.overdue-tag{ color:var(--rust); font-weight:700; }
+  .ms-due.upcoming-tag{ color:var(--amber); font-weight:700; }
+  .nap-info{ display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:var(--ink-soft); color:#fff; font-size:10px; font-style:italic; font-family:Georgia,serif; margin-left:6px; cursor:help; vertical-align:middle; }
+  .nap-info:hover, .nap-info:focus{ background:var(--crimson); outline:none; }
+  .ms-right{ display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; }
+  .flag{ font-size:10px; letter-spacing:.03em; padding:2px 7px; border-radius:20px; font-weight:700; }
+  .flag.overdue{ background:var(--rust); color:#fff; } .flag.upcoming{ background:var(--amber); color:#fff; }
+  .ms-detail{ font-size:12.5px; color:var(--ink-soft); line-height:1.6; padding:0 14px 14px 47px; }
+  .ms-outputs{ margin-top:8px; display:flex; flex-wrap:wrap; gap:5px; }
+  .out-tag{ font-size:10.5px; padding:2px 8px; border-radius:3px; font-family:'Montserrat',sans-serif; font-weight:700; background:#F5E6E6; color:var(--crimson); }
+  .note-toggle{ all:unset; cursor:pointer; font-size:11px; color:var(--ink-soft); text-decoration:underline; text-underline-offset:2px; margin-top:8px; display:inline-block; }
+  .note-area{ margin-top:8px; }
+  .note-area textarea{ width:100%; min-height:60px; font:inherit; font-size:12.5px; padding:9px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); color:var(--ink); resize:vertical; }
+  .note-preview{ font-size:12px; color:var(--ink-soft); margin-top:6px; font-style:italic; max-width:68ch; white-space:pre-wrap; }
+  .note-save-row{ display:flex; justify-content:flex-end; margin-top:6px; }
+  .note-save-btn{ all:unset; cursor:pointer; font-size:11px; font-weight:700; color:#fff; background:var(--crimson); padding:4px 11px; border-radius:3px; }
+  .note-save-btn:hover{ background:var(--crimson-dark); }
+
+  /* Explore the Evidence (chat) */
+  .chat-box{ border:1px solid var(--line); border-radius:var(--radius); background:var(--paper-raised); padding:18px 20px; margin-bottom:14px; min-height:320px; max-height:54vh; overflow-y:auto; }
+  .chat-empty{ color:var(--ink-soft); font-size:13px; text-align:center; padding:30px 10px; }
+  .chat-msg-row{ display:flex; margin-bottom:12px; }
+  .chat-msg-row.user{ justify-content:flex-end; }
+  .chat-msg-row.assistant{ justify-content:flex-start; }
+  .chat-bubble{ max-width:88%; padding:10px 14px; border-radius:12px; font-size:13.5px; }
+  .chat-bubble.user{ background:var(--crimson); color:#fff; border-bottom-right-radius:3px; }
+  .chat-bubble.assistant{ background:var(--paper); border:1px solid var(--line); color:var(--ink); border-bottom-left-radius:3px; }
+  .chat-bubble.thinking{ color:var(--ink-soft); font-style:italic; }
+  .chat-input-row{ display:flex; gap:10px; align-items:flex-end; }
+  .chat-input-row textarea{ flex:1; resize:none; padding:11px 13px; border:1.5px solid var(--line); border-radius:var(--radius); font:inherit; font-size:13.5px; line-height:1.4; max-height:120px; background:var(--paper-raised); color:var(--ink); }
+  .chat-input-row button{ flex-shrink:0; }
+  .chat-footnote{ font-size:11px; color:var(--ink-soft); margin-top:8px; }
+
+  /* Data sources panel */
+  .sources-panel{ margin-bottom:14px; }
+  .sources-toggle{ all:unset; cursor:pointer; display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:10px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper-raised); font-size:12.5px; color:var(--crimson); font-weight:700; font-family:'Montserrat',sans-serif; }
+  .sources-toggle:hover{ border-color:var(--crimson); }
+  .sources-chev{ font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--ink-soft); }
+  .sources-list{ margin-top:6px; max-height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper-raised); }
+  .source-group:not(:last-child){ border-bottom:2px solid var(--line); }
+  .source-group-head{ position:sticky; top:0; background:var(--paper-raised); padding:9px 14px; border-bottom:1px solid var(--line); z-index:1; }
+  .source-group-title{ display:block; font-family:'Montserrat',sans-serif; font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--crimson); }
+  .source-group-sub{ display:block; font-size:10.5px; color:var(--ink-soft); margin-top:1px; }
+  .source-row{ padding:11px 14px; border-bottom:1px solid var(--line); }
+  .source-row:last-child{ border-bottom:none; }
+  .source-row-head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:3px; }
+  .source-label{ font-size:12.5px; font-weight:700; color:var(--ink); }
+  .source-cat{ font-size:10px; color:var(--crimson); background:#F5E6E6; padding:2px 7px; border-radius:10px; white-space:nowrap; flex:0 0 auto; }
+  .source-desc{ font-size:12px; color:var(--ink-soft); line-height:1.45; margin-bottom:4px; }
+  .source-access{ font-size:11px; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:6px 9px; margin-bottom:5px; line-height:1.45; }
+  .source-meta{ font-size:10.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; }
+
+  /* Phase close-out */
+  .closeout{ margin-top:26px; padding:18px 20px; border:1px solid var(--line); border-left:4px solid var(--crimson); border-radius:var(--radius); background:var(--paper-raised); }
+  .closeout.closed{ border-left-color:var(--teal); }
+  .closeout h3{ font-size:14px; margin-bottom:8px; }
+  .closeout p{ font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin-bottom:10px; }
+  .closeout-open{ font-size:12px; color:var(--rust); margin-bottom:10px; }
+  .closeout-status{ font-size:13px; font-weight:700; color:var(--teal); margin-bottom:8px; }
+  .closeout-note{ font-size:12.5px; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:9px 12px; margin-bottom:10px; white-space:pre-wrap; line-height:1.5; }
+  .closeout textarea{ width:100%; box-sizing:border-box; min-height:64px; padding:9px 11px; border:1.5px solid var(--line); border-radius:6px; font:inherit; font-size:12.5px; margin-bottom:10px; background:var(--paper); color:var(--ink); resize:vertical; }
+  .closeout-reopen{ all:unset; cursor:pointer; font-size:11.5px; color:var(--ink-soft); text-decoration:underline; text-underline-offset:2px; }
+  .closeout-reopen:hover{ color:var(--crimson); }
+
+  footer.legend{ display:flex; gap:18px; margin-top:24px; font-size:11px; color:var(--ink-soft); flex-wrap:wrap; }
+  .legend .lk{ display:flex; align-items:center; gap:6px; }
+  .legend .sw{ width:9px; height:9px; border-radius:50%; }
+  .sw.not_started{ background:var(--line); border:1px solid var(--ink-soft); } .sw.in_progress{ background:var(--amber); } .sw.done{ background:var(--teal); }
+
+  @media (max-width:780px){
+    #topbar{ padding:12px 16px; justify-content:center; }
+    #shell{ flex-direction:column; }
+    #nav{ width:100%; flex:none; padding:16px 0; }
+    nav.tabs{ flex-direction:row; overflow-x:auto; padding:10px; }
+    .tab-btn{ flex:0 0 auto; }
+    .tab-progress{ display:none; }
+    .nav-note{ display:none; }
+    #main{ padding:22px 16px 50px; }
+    .stat-strip{ flex-wrap:wrap; }
+    .stat{ flex:1 1 45%; border-bottom:1px solid var(--line); }
+    .journey{ grid-template-columns:repeat(2,1fr); }
+    .ledger-row{ grid-template-columns:16px 1fr; row-gap:8px; }
+  }
+  [hidden]{ display:none !important; }
+
+  /* ---- Printable work plan (hidden on screen, shown only via window.print()) ---- */
+  #printArea{ display:none; }
+  .print-btn{ all:unset; cursor:pointer; padding:9px 16px; border-radius:20px; font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; color:var(--ink-soft); background:var(--paper-raised); border:1.5px solid var(--line); display:inline-flex; align-items:center; gap:6px; }
+  .print-btn:hover{ color:var(--crimson); border-color:var(--crimson); }
+  @media print {
+    #app{ display:none !important; }
+    #printArea{ display:block !important; }
+    body{ background:#fff; font-size:11.5pt; }
+    .pw-page{ padding:0; }
+    .pw-cover{ padding-top:22vh; text-align:center; page-break-after:always; }
+    .pw-cover .pw-eyebrow{ font-family:'Montserrat',sans-serif; font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:11pt; color:var(--crimson); margin-bottom:14px; }
+    .pw-cover h1{ font-family:'Montserrat',sans-serif; font-weight:800; font-size:30pt; color:var(--ink); line-height:1.2; margin-bottom:10px; }
+    .pw-cover .pw-sub{ font-family:'Montserrat',sans-serif; font-weight:600; font-size:14pt; color:var(--ink-soft); margin-bottom:40px; }
+    .pw-cover .pw-meta{ font-size:10.5pt; color:var(--ink-soft); }
+    .pw-cover .pw-meta div{ margin-bottom:4px; }
+    .pw-summary{ page-break-after:always; }
+    .pw-summary h2, .pw-phase h2{ font-family:'Montserrat',sans-serif; font-weight:800; font-size:16pt; color:var(--crimson); border-bottom:2px solid var(--crimson); padding-bottom:6px; margin-bottom:14px; }
+    .pw-summary-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px 28px; margin-bottom:20px; }
+    .pw-summary-grid .pw-stat-label{ font-size:9.5pt; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin-bottom:2px; }
+    .pw-summary-grid .pw-stat-value{ font-family:'Montserrat',sans-serif; font-weight:800; font-size:14pt; }
+    .pw-phase-list{ width:100%; border-collapse:collapse; font-size:10pt; }
+    .pw-phase-list th{ text-align:left; font-family:'Montserrat',sans-serif; font-size:9pt; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); border-bottom:1.5px solid var(--ink); padding:4px 8px 6px 0; }
+    .pw-phase-list td{ padding:7px 8px 7px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+    .pw-phase{ page-break-before:always; }
+    .pw-phase-head{ margin-bottom:4px; }
+    .pw-phase-kicker{ font-family:'IBM Plex Mono',monospace; font-size:9.5pt; color:var(--ink-soft); margin-bottom:2px; }
+    .pw-phase-dates{ font-size:10pt; color:var(--ink-soft); margin-bottom:10px; }
+    .pw-exit{ background:#F7F2EA; border-left:3px solid var(--gold-deep); padding:9px 12px; font-size:10pt; margin-bottom:16px; }
+    .pw-exit strong{ font-family:'Montserrat',sans-serif; font-size:9pt; text-transform:uppercase; letter-spacing:.03em; display:block; margin-bottom:3px; color:var(--amber); }
+    .pw-closed{ background:var(--teal-tint); border-left:3px solid var(--teal); padding:9px 12px; font-size:10pt; margin-bottom:16px; }
+    .pw-closed strong{ font-family:'Montserrat',sans-serif; font-size:9pt; text-transform:uppercase; letter-spacing:.03em; display:block; margin-bottom:3px; color:var(--teal); }
+    .pw-ms{ margin-bottom:16px; page-break-inside:avoid; }
+    .pw-ms-head{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:5px; }
+    .pw-ms-title{ font-family:'Montserrat',sans-serif; font-weight:700; font-size:11.5pt; }
+    .pw-ms-title .pw-decision-tag{ font-family:'Montserrat',sans-serif; font-weight:700; font-size:8pt; text-transform:uppercase; letter-spacing:.03em; color:var(--rust); border:1px solid var(--rust); border-radius:3px; padding:1px 6px; margin-left:7px; vertical-align:middle; }
+    .pw-ms-date{ font-family:'IBM Plex Mono',monospace; font-size:9.5pt; color:var(--ink-soft); white-space:nowrap; }
+    .pw-ms-sub{ font-size:10pt; color:var(--ink-soft); font-style:italic; margin-bottom:4px; }
+    .pw-ms-detail{ font-size:10pt; margin-bottom:5px; }
+    .pw-ms-row2{ display:flex; gap:18px; font-size:9.5pt; color:var(--ink-soft); flex-wrap:wrap; }
+    .pw-ms-row2 b{ color:var(--ink); }
+    .pw-ms-status{ font-family:'Montserrat',sans-serif; font-weight:700; font-size:8.5pt; text-transform:uppercase; letter-spacing:.03em; padding:1px 7px; border-radius:3px; }
+    .pw-ms-status.done{ background:var(--teal-tint); color:var(--teal); }
+    .pw-ms-status.in_progress{ background:var(--amber-tint); color:var(--amber); }
+    .pw-ms-status.not_started{ background:var(--line); color:var(--ink-soft); }
+    .pw-decision-record{ margin-top:5px; font-size:9.5pt; background:var(--rust-tint); border-left:2px solid var(--rust); padding:5px 9px; }
+    .pw-decision-record strong{ font-size:8.5pt; text-transform:uppercase; letter-spacing:.03em; display:block; margin-bottom:2px; }
+    .pw-footer{ margin-top:30px; font-size:8.5pt; color:var(--ink-soft); border-top:1px solid var(--line); padding-top:8px; }
+    @page{ margin:0.75in 0.7in; }
+  }
+
+  /* ---- Draft the NAP ---- */
+  .dr-chip{ display:inline-block; font-family:'Montserrat',sans-serif; font-size:10.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:3px 9px; border-radius:10px; }
+  .dr-chip.ready{ background:#E3F1E4; color:#1F5E27; } .dr-chip.partial{ background:#FBF0CC; color:#7A5A00; } .dr-chip.not_enough{ background:#F5E1E1; color:var(--crimson-dark); } .dr-chip.unchecked{ background:#EEE8DF; color:var(--ink-soft); }
+  .dr-card{ background:var(--paper-raised); border:1px solid var(--line); border-left:4px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:12px; }
+  .dr-card.ready{ border-left-color:#3C8C48; } .dr-card.partial{ border-left-color:var(--gold-deep); } .dr-card.not_enough{ border-left-color:var(--crimson); }
+  .dr-head{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .dr-title{ font-family:'Montserrat',sans-serif; font-weight:700; font-size:14.5px; flex:1; min-width:180px; }
+  .dr-counts{ font-size:12px; color:var(--ink-soft); margin-top:4px; }
+  .dr-sum{ font-size:13px; margin-top:8px; }
+  .dr-cols{ display:flex; gap:22px; flex-wrap:wrap; margin-top:8px; font-size:12.5px; }
+  .dr-cols h5{ font-family:'Montserrat',sans-serif; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:3px; }
+  .dr-cols ul{ padding-left:17px; margin:0; } .dr-cols > div{ flex:1; min-width:210px; }
+  .dr-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .dr-actions input{ flex:1; min-width:200px; padding:7px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; font-size:12.5px; }
+  .dr-btn-alt{ all:unset; cursor:pointer; padding:8px 14px; border-radius:6px; border:1.5px solid var(--crimson); color:var(--crimson); font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; }
+  .dr-btn-alt:hover{ background:#F5E6E6; } .dr-disabled{ opacity:.5; pointer-events:none; }
+  .dr-draft{ margin-top:14px; border-top:1px dashed var(--line); padding-top:12px; }
+  .dr-body{ background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:12px 15px; font-size:13.5px; }
+  .dr-meta{ font-size:12px; color:var(--ink-soft); margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .dr-confirm{ background:#FBF0CC; border-radius:6px; padding:8px 12px; margin-top:8px; font-size:12.5px; } .dr-confirm ul{ padding-left:17px; margin:3px 0 0; }
+  .dr-banner{ background:#FBF0CC; border:1px solid var(--gold-deep); border-radius:var(--radius); padding:10px 14px; margin-bottom:14px; font-size:13px; }
+  .dr-err{ background:#F5E1E1; border:1px solid var(--crimson); color:var(--crimson-dark); border-radius:var(--radius); padding:10px 14px; margin-bottom:14px; font-size:13px; }
+  .dr-note{ font-size:12px; color:var(--ink-soft); margin-top:16px; line-height:1.55; }
+
+  /* ---- Evidence Needs ---- */
+  .nd-bar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 16px; }
+  .nd-bar label{ font-size:12.5px; color:var(--ink-soft); display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .nd-toggle{ all:unset; cursor:pointer; padding:7px 14px; font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; border:1.5px solid var(--crimson); color:var(--crimson); background:var(--paper-raised); }
+  .nd-toggle.first{ border-radius:6px 0 0 6px; } .nd-toggle.last{ border-radius:0 6px 6px 0; margin-left:-1.5px; }
+  .nd-toggle.active{ background:var(--crimson); color:#fff; }
+  .nd-group{ margin-bottom:26px; }
+  .nd-group h3{ font-family:'Montserrat',sans-serif; font-size:15px; margin-bottom:2px; }
+  .nd-group .nd-blurb{ font-size:12.5px; color:var(--ink-soft); margin-bottom:10px; }
+  .nd-item{ background:var(--paper-raised); border:1px solid var(--line); border-left:4px solid var(--crimson); border-radius:var(--radius); padding:11px 14px; margin-bottom:8px; }
+  .nd-item.covered{ border-left-color:#3C8C48; } .nd-item.partial{ border-left-color:var(--gold-deep); }
+  .nd-top{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .nd-label{ font-weight:700; font-size:13.5px; flex:1; min-width:200px; }
+  .nd-for{ font-size:11.5px; color:var(--ink-soft); }
+  .nd-detail{ font-size:12.5px; margin-top:4px; color:var(--ink); }
+  .nd-meta{ font-size:11.5px; color:var(--ink-soft); margin-top:4px; }
+  .nd-caution{ background:#FBF0CC; border-radius:6px; padding:6px 10px; margin-top:6px; font-size:12px; }
+  .nd-actions{ display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+  .nd-actions input{ flex:1; min-width:180px; padding:6px 9px; border:1px solid var(--line); border-radius:6px; font:inherit; font-size:12px; }
+  .nd-prog{ font-size:12px; color:var(--ink-soft); margin:2px 0 10px; }
+
+  .nd-item.received{ border-left-color:#3C8C48; background:#F3F9F3; }
+  .nd-badge{ font-size:10.5px; font-weight:700; font-family:'Montserrat',sans-serif; padding:3px 9px; border-radius:10px; white-space:nowrap; cursor:help; }
+  .nd-badge.pub{ background:#E4ECF7; color:#1F3F6E; } .nd-badge.com{ background:#F3E4F5; color:#5B2468; } .nd-badge.par{ background:#E8EFE6; color:#3A5A33; } .nd-badge.dec{ background:#EEE8DF; color:var(--ink-soft); }
+  .nd-owner{ font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif; padding:3px 9px; border-radius:10px; background:var(--crimson); color:#fff; }
+  .nd-owner.none{ background:transparent; color:var(--ink-soft); border:1px dashed var(--line); font-weight:600; }
+  .nd-for{ margin-top:3px; }
+  .nd-sel{ font-size:12px; color:var(--ink-soft); display:flex; gap:6px; align-items:center; }
+  .nd-sel select, .nd-bar select{ padding:5px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; font-size:12.5px; background:#fff; }
+  .nd-toggle.mid{ margin-left:-1.5px; border-radius:0; }
+  .nd-edit{ margin-top:10px; display:flex; flex-direction:column; gap:8px; border-top:1px dashed var(--line); padding-top:10px; }
+  .nd-edit label{ font-size:12px; color:var(--ink-soft); display:flex; flex-direction:column; gap:3px; }
+  .nd-edit input, .nd-edit textarea{ padding:7px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; font-size:12.5px; color:var(--ink); }
+  .nd-notes-view{ margin-top:6px; background:var(--paper); border-radius:6px; padding:6px 10px; font-size:12.5px; white-space:pre-wrap; }
+  .nd-flash{ margin-top:6px; font-size:12px; font-weight:700; color:var(--crimson-dark); }
+  .chat-copy{ all:unset; cursor:pointer; font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif; color:var(--crimson); border:1px solid var(--line); border-radius:6px; padding:3px 9px; margin-top:8px; display:inline-block; background:#fff; }
+  .chat-copy:hover{ background:#F5E6E6; }
+  .drive-link{ margin-right:auto; font-family:'Montserrat',sans-serif; font-size:12.5px; font-weight:700; color:var(--crimson); text-decoration:none; padding:9px 4px; }
+  .drive-link:hover{ text-decoration:underline; }
+  .nd-question{ margin-top:4px; font-size:13px; font-style:italic; }
+  .nd-confusion{ background:#E9EEF8; border-radius:6px; padding:6px 10px; margin-top:6px; font-size:12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar"></header>
+  <div id="shell">
+    <aside id="nav">
+      <div class="brand">
+        <span class="eyebrow">We Are CASA × Root Change</span>
+        <h1>Langley Park NAP</h1>
+        <div class="sub" id="brandSub">&nbsp;</div>
+      </div>
+      <div id="navBody"></div>
+      <div class="nav-note">Explore the Evidence answers from the Langley Park indicator table and this pipeline — a standalone dashboard view of the indicators themselves is still planned separately.</div>
+      <div class="nav-foot">
+        <div class="save-state"><span class="dot" id="saveDot"></span><span id="saveText">Loading…</span></div>
+        <div class="nav-actions">
+          <button id="btnExport">Export data</button>
+          <label>Import data<input type="file" id="fileImport" accept="application/json" hidden></label>
+          <button id="btnReset">Reset</button>
+        </div>
+      </div>
+    </aside>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="printArea" aria-hidden="true"></div>
+
+<script>
+(function(){
+  "use strict";
+  // ---------- Supabase (rc-pipeline project, shared with other Root Change tools) ----------
+  var SUPABASE_URL = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
+  var sbH = { 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+SUPABASE_KEY, 'Content-Type':'application/json' };
+
+  var OWNERS = {
+    casa:      { label:'CASA', cls:'owner-casa' },
+    rc:        { label:'Root Change', cls:'owner-rc' },
+    coalition: { label:'Coalition', cls:'owner-coalition' },
+    joint:     { label:'CASA + Root Change', cls:'owner-joint' },
+    steering:  { label:'Steering Committee', cls:'owner-steering' },
+    wjwi:      { label:'WJWI', cls:'owner-wjwi' }
+  };
+
+  // Content (stage/milestone text, dates, owners) now lives in Supabase
+  // (casa_pipeline_stages / casa_pipeline_milestones) rather than a hardcoded
+  // client-side array — this is what actually solves the stale-cache problem
+  // localStorage had, since there's nothing left to go stale client-side.
+  async function loadState(){
+    var stRes = await fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_stages?select=*&order=sort_order.asc', {headers:sbH});
+    var msRes = await fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_milestones?select=*&order=sort_order.asc', {headers:sbH});
+    var napRes = await fetch(SUPABASE_URL+'/rest/v1/casa_nap_workbook_sections?select=*&order=sort_order.asc', {headers:sbH});
+    if (!stRes.ok || !msRes.ok || !napRes.ok) throw new Error('Supabase returned an error loading the pipeline');
+    var stages = await stRes.json();
+    var milestones = await msRes.json();
+    STATE.napSections = await napRes.json();
+    STATE.stages = stages.map(function(s){
+      return {
+        id:s.id, num:s.num, name:s.name, label:s.label, dates:s.dates, payment:s.payment, exitTest:s.exit_test,
+        closedOn:s.closed_on||null, closedNote:s.closed_note||'',
+        milestones: milestones.filter(function(m){ return m.stage_id===s.id; }).map(function(m){
+          return { id:m.id, title:m.title, sub:m.sub, detail:m.detail, date:m.date, type:m.type,
+            status:m.status, owners:m.owners||[], outputs:m.outputs||[], notes:m.notes||'', decisionRecord:m.decision_record||'' };
+        })
+      };
+    });
+  }
+
+  var STATE = { stages: [], napSections: [] };
+  var DATA_SOURCES = [];
+  var currentTab = 'overview';
+  var openNotes = {};
+  var napOpenNotes = {};
+  var sourcesExpanded = false;
+  var NAP_STATUS_ORDER = ['not_started','drafted','needs_review','complete'];
+  var NAP_STATUS_LABEL = { not_started:'Not started', drafted:'Drafted', needs_review:'Needs review', complete:'Complete' };
+  var NAP_STATUS_WEIGHT = { not_started:0, drafted:0.33, needs_review:0.66, complete:1 };
+
+  function napProgressPct(){
+    var secs = STATE.napSections.filter(function(s){ return s.in_final_nap; });
+    if (!secs.length) return 0;
+    var sum = secs.reduce(function(a,s){ return a + (NAP_STATUS_WEIGHT[s.status]||0); }, 0);
+    return Math.round(sum/secs.length*100);
+  }
+
+
+  async function loadDataSources(){
+    try{
+      var res = await fetch(SUPABASE_URL+'/rest/v1/casa_data_sources?select=*&order=sort_order.asc', {headers:sbH});
+      if (res.ok) DATA_SOURCES = await res.json();
+    } catch(e){ /* non-critical — the chat still works without this list rendering */ }
+  }
+
+  function todayISO(){ var n=new Date(); return n.getFullYear()+'-'+pad(n.getMonth()+1)+'-'+pad(n.getDate()); }
+  function pad(x){ return x<10?'0'+x:''+x; }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fmtDate(iso){
+    var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var p=iso.split('-'); return months[parseInt(p[1],10)-1]+' '+parseInt(p[2],10)+', '+p[0];
+  }
+  function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
+  function statusLabel(s){ return s==='done'?'Done':(s==='in_progress'?'In progress':'Not started'); }
+  function ownerChip(k){ var o=OWNERS[k]; return o?'<span class="owner-chip '+o.cls+'">'+esc(o.label)+'</span>':''; }
+
+  function jmDot(m){
+    var cls='jm-dot '+m.status+(m.type==='decision'?' decision':'');
+    var tip = esc(m.title)+' \u00b7 '+statusLabel(m.status)+' \u00b7 '+fmtDate(m.date)+(m.type==='decision'?' \u00b7 decision':'');
+    return '<span class="dot-cell" title="'+esc(m.title)+' \u2014 '+statusLabel(m.status)+'"><span class="'+cls+'"></span><span class="dot-tip">'+tip+'</span></span>';
+  }
+
+  function allMs(){ var out=[]; STATE.stages.forEach(function(s){ s.milestones.forEach(function(m){ out.push({s:s,m:m}); }); }); return out; }
+  function findStage(id){ return STATE.stages.filter(function(s){ return s.id===id; })[0]; }
+  function findMs(id){ var r=null; STATE.stages.forEach(function(s){ s.milestones.forEach(function(m){ if(m.id===id) r={s:s,m:m}; }); }); return r; }
+
+  function msFlag(m){
+    if (m.status==='done') return null;
+    var today = todayISO();
+    if (m.date < today) return 'overdue';
+    var d1=new Date(m.date), d2=new Date(today);
+    var diffDays=(d1-d2)/86400000;
+    if (diffDays>=0 && diffDays<=21) return 'upcoming';
+    return null;
+  }
+  function stageAlertStatus(s){
+    if (s.milestones.some(function(m){ return msFlag(m)==='overdue'; })) return 'overdue';
+    if (s.milestones.some(function(m){ return msFlag(m)==='upcoming'; })) return 'upcoming';
+    return null;
+  }
+  function stageProgress(s){
+    var total=s.milestones.length, done=s.milestones.filter(function(m){ return m.status==='done'; }).length;
+    return { done:done, total:total, pct: total?Math.round(done/total*100):0 };
+  }
+
+  // ---------- Render ----------
+  // Open, exploratory questions -- not framed as a NAP compliance check.
+  // They're chosen because answering them happens to be exactly the work of
+  // filling out the NAP (strengths/needs, program rationale, priorities),
+  // but the bot should read as a general evidence tool, not a narrow checklist.
+  var ASK_SECTIONS = [
+    { name:'Cradle to Career Education', qs:[
+      'What does the evidence tell us about why so few students are reading at grade level by 3rd grade?',
+      'Where are the biggest opportunity gaps for Langley Park students compared to the rest of the county?',
+      'What do we know about the career and college pathways available to local students?'
+    ]},
+    { name:'Healthy Families', qs:[
+      'What\u2019s really going on with health insurance coverage in Langley Park?',
+      'What would it take to close the gap between Langley Park and county health outcomes?',
+      'What does the evidence say about food security and access to care here?'
+    ]},
+    { name:'Economically Secure Families', qs:[
+      'What\u2019s driving the income and poverty gap between Langley Park and the rest of the county?',
+      'What do we know about work, wages, and housing costs for Langley Park families?',
+      'Where are women in Langley Park being left out of the workforce, and why?'
+    ]},
+    { name:'Safe and Thriving Communities', qs:[
+      'What makes Langley Park feel safe or unsafe to the people who live there?',
+      'What do we know about transportation and mobility challenges in this neighborhood?',
+      'What\u2019s affecting housing stability here \u2014 evictions, foreclosures, vacancy?'
+    ]}
+  ];
+
+  function renderTopbar(){
+    var tb = document.getElementById('topbar');
+    var napPct = napProgressPct();
+    var planActive = (currentTab!=='nap' && currentTab!=='ask' && currentTab!=='draft' && currentTab!=='needs') ? ' active':'';
+    var needsActive = currentTab==='needs' ? ' active':'';
+    var draftActive = currentTab==='draft' ? ' active':'';
+    var napActive = currentTab==='nap' ? ' active':'';
+    var askActive = currentTab==='ask' ? ' active':'';
+    tb.innerHTML =
+      '<a class="drive-link" href="'+DRIVE_FOLDER_URL+'" target="_blank" rel="noopener" title="Opens the shared Google Drive folder where project files are stored">\uD83D\uDCC1 Project files (Google Drive)</a>' +
+      '<button class="toplevel-btn'+planActive+'" data-tab="overview">Work Plan</button>' +
+      '<button class="toplevel-btn'+napActive+'" data-tab="nap">NAP Workbook<span class="toplevel-pct">'+napPct+'%</span></button>' +
+      '<button class="toplevel-btn'+needsActive+'" data-tab="needs">Evidence Needs</button>' +
+      '<button class="toplevel-btn'+askActive+'" data-tab="ask">Explore the Evidence</button>' +
+      '<button class="toplevel-btn'+draftActive+'" data-tab="draft">Draft the NAP</button>';
+    tb.querySelectorAll('.toplevel-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ currentTab = btn.getAttribute('data-tab'); renderAll(); });
+    });
+  }
+
+  function renderNavBody(){
+    var body = document.getElementById('navBody');
+    if (!body) return;
+    if (currentTab === 'ask'){
+      body.innerHTML = ASK_SECTIONS.map(function(sec){
+        return '<div class="rail-section"><h4>'+esc(sec.name)+'</h4>' +
+          sec.qs.map(function(q){ return '<button class="rail-q" data-ask-example>'+esc(q)+'</button>'; }).join('') +
+          '</div>';
+      }).join('');
+      document.querySelectorAll('#navBody [data-ask-example]').forEach(function(el){
+        el.addEventListener('click', function(){
+          document.getElementById('chat-input').value = el.textContent;
+          sendChatMessage();
+        });
+      });
+    } else if (currentTab === 'needs'){
+      body.innerHTML = '<div class="rail-section"><h4>How to use this</h4><div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.55;">Work down the list. Green items are covered. Upload what is missing, or mark an item as provided once it is on file. Use Copy this list to send a request to a partner.</div></div>';
+    } else if (currentTab === 'draft'){
+      body.innerHTML = '<div class="rail-section"><h4>How it works</h4><div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.55;">1. Check readiness to see which sections have enough evidence.<br>2. Draft a section. It is written only from the evidence linked to it.<br>3. Review, edit, and copy it into the Google Doc.</div></div>';
+    } else if (currentTab === 'nap'){
+      body.innerHTML = '<div class="rail-section"><h4>About this tab</h4>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.55;">Tracks every section the final Neighborhood Action Plan document needs, separate from our own delivery phases on the left when you go Back to Work Plan.</div></div>';
+    } else {
+      var overviewAlert = STATE.stages.some(function(s){ return stageAlertStatus(s)==='overdue'; }) ? 'overdue'
+        : (STATE.stages.some(function(s){ return stageAlertStatus(s)==='upcoming'; }) ? 'upcoming' : null);
+      var html = '<nav class="tabs" id="tabs">' + tabBtn('overview','Overview',null,overviewAlert);
+      STATE.stages.forEach(function(s){ html += tabBtn(s.id, s.name, stageProgress(s), stageAlertStatus(s)); });
+      html += '</nav>';
+      body.innerHTML = html;
+      body.querySelectorAll('.tab-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){ currentTab = btn.getAttribute('data-tab'); renderAll(); });
+      });
+    }
+  }
+  function tabBtn(id,label,prog,alert){
+    var active = currentTab===id ? ' active':'';
+    var n = id==='overview' ? '—' : (findStage(id).closedOn ? '\u2713' : findStage(id).num);
+    var dotTitle = alert==='overdue' ? 'Has overdue milestones' : (alert==='upcoming' ? 'Has milestones due soon' : '');
+    var dot = alert ? '<span class="tab-alert-dot '+alert+'" title="'+dotTitle+'"></span>' : '';
+    var pr = prog ? '<span class="tab-progress">'+prog.done+'/'+prog.total+'</span>' : '';
+    return '<button class="tab-btn'+active+'" data-tab="'+id+'"><span class="n">'+n+'</span><span>'+esc(label)+'</span>'+dot+pr+'</button>';
+  }
+
+  // Dynamic "Week N of X" — computed from the earliest and latest milestone
+  // dates in the data, so it stays correct if the schedule changes.
+  function weekLabel(){
+    if (!STATE.stages.length) return '\u00a0';
+    var b = scheduleBounds();
+    var start = new Date(b.start), end = new Date(b.end), now = new Date(todayISO());
+    var totalWeeks = Math.max(1, Math.ceil(Math.round((end-start)/86400000) / 7));
+    var daysIn = Math.round((now-start)/86400000);
+    if (daysIn < 0){
+      var d = -daysIn;
+      return 'Kickoff in ' + d + ' day' + (d===1?'':'s');
+    }
+    if (now > end) return 'Schedule complete';
+    var wk = Math.min(totalWeeks, Math.floor(daysIn/7) + 1);
+    return 'Week ' + wk + ' of ' + totalWeeks;
+  }
+
+  function renderAll(){
+    var bs = document.getElementById('brandSub'); if (bs) bs.textContent = weekLabel();
+    renderTopbar();
+    renderNavBody();
+    var main=document.getElementById('main');
+    if (currentTab==='overview') main.innerHTML = renderOverview();
+    else if (currentTab==='ask') main.innerHTML = renderAsk();
+    else if (currentTab==='nap') main.innerHTML = renderNapWorkbook();
+    else if (currentTab==='draft') main.innerHTML = renderDraftTab();
+    else if (currentTab==='needs') main.innerHTML = renderNeedsTab();
+    else main.innerHTML = renderStage(findStage(currentTab));
+    wireInteractions();
+    if (currentTab==='ask') { renderChatMessages(); wireChatInteractions(); }
+    if (currentTab==='draft') wireDraftTab();
+    if (currentTab==='needs') wireNeedsTab();
+  }
+
+  function scheduleBounds(){
+    var dates = allMs().map(function(x){ return x.m.date; });
+    return { start: dates.reduce(function(a,b){ return b<a?b:a; }), end: dates.reduce(function(a,b){ return b>a?b:a; }) };
+  }
+
+  function timeElapsedLabel(){
+    var b = scheduleBounds();
+    var start = new Date(b.start), end = new Date(b.end), now = new Date(todayISO());
+    var span = Math.round((end-start)/86400000), intoRaw = Math.round((now-start)/86400000);
+    if (intoRaw < 0) return 'Not started<small> \u00b7 begins in '+(-intoRaw)+' days</small>';
+    var into = Math.min(intoRaw, span);
+    return into+'<small> / '+span+' days</small>';
+  }
+
+  function renderOverview(){
+    var allD = allMs();
+    var totalDeliv = allD.length, doneDeliv = allD.filter(function(x){ return x.m.status==='done'; }).length;
+    var overallPct = totalDeliv ? Math.round(doneDeliv/totalDeliv*100) : 0;
+    var overdue = allD.filter(function(x){ return msFlag(x.m)==='overdue'; });
+    var upcoming = allD.filter(function(x){ return msFlag(x.m)==='upcoming'; });
+    // Current stage = the earliest stage the team hasn't formally closed out.
+    // This is a manual declaration (see the Phase close-out card on each stage
+    // page), so early work in the next phase never shifts it. If every phase
+    // has been closed, show the final one.
+    var curStage = STATE.stages.filter(function(s){ return !s.closedOn; })[0] || STATE.stages[STATE.stages.length-1];
+    var curIdx = STATE.stages.indexOf(curStage);
+    var orderedStages = STATE.stages.slice(curIdx).concat(STATE.stages.slice(0,curIdx));
+    var bounds = scheduleBounds();
+
+    var html='';
+    html += '<div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
+    html += '<h2 style="margin:0;">Delivery pipeline overview</h2>';
+    html += '<button class="print-btn" data-print-workplan>🖶 Print / save as PDF</button>';
+    html += '</div>';
+
+    html += '<div class="stat-strip">';
+    html += statBlock('Current stage', curStage.name, curStage.label);
+    html += statBlock('Time elapsed', timeElapsedLabel(), 'against the target schedule ('+fmtDate(bounds.start)+' \u2013 '+fmtDate(bounds.end)+')');
+    html += statBlock('Overall progress', overallPct+'<small>%</small>', doneDeliv+' of '+totalDeliv+' milestones done');
+    html += statBlock('Needs attention', (overdue.length+upcoming.length), overdue.length+' overdue · '+upcoming.length+' due within 3 weeks');
+    html += '</div>';
+
+    html += '<div class="journey">';
+    orderedStages.forEach(function(s){
+      var p=stageProgress(s); var allDone=p.pct===100 || !!s.closedOn;
+      var numStyle = allDone ? 'background:var(--teal);color:#fff' : (p.done>0 ? 'background:var(--crimson);color:#fff' : 'background:var(--paper);color:var(--ink-soft);border:1.5px solid var(--line)');
+      html += '<button class="jstage" data-goto="'+s.id+'"><div class="jstage-top"><div class="jstage-num" style="'+numStyle+'">'+(allDone?'\u2713':s.num)+'</div><div class="jstage-label">'+esc(s.name)+'</div></div>'+
+        '<div class="jstage-track"><div class="jstage-fill" style="width:'+p.pct+'%"></div></div>'+
+        '<div class="jstage-dots">'+s.milestones.map(jmDot).join('')+'</div>'+
+        '<div class="jstage-count">'+p.done+'/'+p.total+' milestones</div></button>';
+    });
+    html += '</div>';
+
+    html += '<div class="alerts"><h3>Needs attention</h3>';
+    if (!overdue.length && !upcoming.length){
+      html += '<div class="alerts-empty">Nothing overdue or due in the next three weeks, checked against today\u2019s date each time this opens.</div>';
+    } else {
+      overdue.forEach(function(x){ html += alertRow(x,'overdue'); });
+      upcoming.forEach(function(x){ html += alertRow(x,'upcoming'); });
+    }
+    html += '</div>';
+
+    html += '<div class="ledger"><h3>Stages</h3>';
+    STATE.stages.forEach(function(s){
+      var p=stageProgress(s);
+      html += '<button class="ledger-row" data-goto="'+s.id+'">';
+      html += '<div class="l-num">'+(s.closedOn?'\u2713':(s.num===0?'M':s.num))+'</div>';
+      html += '<div><div class="l-title">'+esc(s.name)+' \u2014 '+esc(s.label)+'</div><div class="l-sub">'+esc(s.dates)+' \u00b7 '+p.done+' of '+p.total+' milestones done'+(s.closedOn?' \u00b7 closed '+fmtDate(s.closedOn):'')+'</div></div>';
+      html += '<div><div class="prog-track"><div class="prog-fill" style="width:'+p.pct+'%"></div></div><div class="prog-label">'+p.pct+'%</div></div>';
+      html += '</div></button>';
+    });
+    html += '</div>';
+    html += legend();
+    return html;
+  }
+
+  function statBlock(label,value,sub){
+    return '<div class="stat"><div class="label">'+label+'</div><div class="value">'+value+'</div><div class="sub">'+esc(sub)+'</div></div>';
+  }
+  function alertRow(x,kind){
+    var label = kind==='overdue' ? 'Overdue' : 'Due soon';
+    return '<button class="alert-row '+kind+'" data-goto="'+x.s.id+'"><span class="flag">'+label+'</span>'+
+      '<span>'+esc(x.m.title)+'</span><span class="a-owner">'+esc(x.s.name)+' \u00b7 '+fmtDate(x.m.date)+'</span></button>';
+  }
+
+  // ---------- Explore the Evidence (chat) ----------
+  // Backend: a Supabase Edge Function ("casa-chat") that reads
+  // casa_indicator_observations + the pipeline tables server-side and
+  // calls the Anthropic API. No client-side data duplication — the
+  // function always reads current data straight from Supabase.
+  var CHAT_FUNCTION_URL = SUPABASE_URL + '/functions/v1/casa-chat';
+  var chatHistory = []; // [{role:'user'|'assistant', content:'...'}]
+  var chatInFlight = false;
+
+  function renderAsk(){
+    return '' +
+    '<div class="page-head"><div class="kicker">Evidence base</div><h2>Explore the Evidence</h2>' +
+    '<div class="meta">Grounded in the Langley Park indicator table and the pipeline above \u2014 not general knowledge. Pick a question from the left to get started.</div></div>' +
+    renderSourcesPanel() +
+    '<div id="chat-messages" class="chat-box"></div>' +
+    '<div class="chat-input-row">' +
+      '<textarea id="chat-input" rows="1" placeholder="Ask a question about the evidence or the pipeline\u2026"></textarea>' +
+      '<button id="chat-send-btn" class="note-save-btn" style="padding:10px 18px;">Send</button>' +
+    '</div>' +
+    '<div class="chat-footnote">Answers are grounded in the indicator table and pipeline data only \u2014 not general knowledge, and not a substitute for the source documents.</div>';
+  }
+
+  var SOURCE_GROUP_ORDER = ['Quantitative','Qualitative','Internal/Process'];
+  var SOURCE_GROUP_BLURB = {
+    'Quantitative': 'Indicator values and statistics the assistant can cite directly.',
+    'Qualitative': 'Community voice, rationale, and narrative context \u2014 not statistics.',
+    'Internal/Process': 'Root Change\u2019s own delivery pipeline, not evidence about Langley Park.'
+  };
+
+  function renderSourcesPanel(){
+    var n = DATA_SOURCES.length;
+    var summary = n
+      ? 'Grounded in ' + n + ' data source' + (n===1?'':'s') + ' \u2014 see what\u2019s included'
+      : 'Loading data sources\u2026';
+    var body = '';
+    if (sourcesExpanded && n){
+      var groups = {};
+      DATA_SOURCES.forEach(function(s){
+        var t = s.data_type || 'Quantitative';
+        (groups[t] = groups[t] || []).push(s);
+      });
+      body = '<div class="sources-list">' + SOURCE_GROUP_ORDER.filter(function(t){ return groups[t]; }).map(function(t){
+        return '<div class="source-group">' +
+          '<div class="source-group-head"><span class="source-group-title">'+esc(t)+'</span><span class="source-group-sub">'+esc(SOURCE_GROUP_BLURB[t]||'')+'</span></div>' +
+          groups[t].map(function(s){
+            return '<div class="source-row">' +
+              '<div class="source-row-head"><span class="source-label">'+esc(s.label)+'</span><span class="source-cat">'+esc(s.category)+'</span></div>' +
+              '<div class="source-desc">'+esc(s.description)+'</div>' +
+              (s.access_method ? '<div class="source-access"><strong>Access:</strong> '+esc(s.access_method)+'</div>' : '') +
+              '<div class="source-meta">Feeds: '+esc(s.feeds_table||'\u2014')+' \u00b7 Added '+fmtDate(s.added_on)+'</div>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+    return '<div class="sources-panel">' +
+      '<button class="sources-toggle" id="sourcesToggle"><span>'+esc(summary)+'</span><span class="sources-chev">'+(sourcesExpanded?'\u2212':'+')+'</span></button>' +
+      body +
+    '</div>';
+  }
+
+  // ---------- Copy as formatted text (pastes into Google Docs / Word as real tables, headings, bullets) ----------
+  function mdToClipHtml(text){
+    var e2=function(x){ return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    var inl=function(x){ return e2(x).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*]+)\*(?!\*)/g,'$1<i>$2</i>').replace(/`([^`]+)`/g,'$1'); };
+    var L=String(text||'').split('\n'), h='', i=0;
+    var isRow=function(l){ return /^\s*\|.*\|\s*$/.test(l); };
+    var cells=function(l){ return l.trim().replace(/^\||\|$/g,'').split('|').map(function(c){ return c.trim(); }); };
+    while(i<L.length){
+      var l=L[i];
+      if (isRow(l) && L[i+1] && /^\s*\|[\s:|-]+\|\s*$/.test(L[i+1])){
+        var hd=cells(l); i+=2;
+        h+='<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;border:1px solid #999;"><thead><tr>'+hd.map(function(c){ return '<th style="border:1px solid #999;background:#f0f0f0;text-align:left;"><b>'+inl(c)+'</b></th>'; }).join('')+'</tr></thead><tbody>';
+        while(i<L.length && isRow(L[i])){ h+='<tr>'+cells(L[i]).map(function(c){ return '<td style="border:1px solid #999;vertical-align:top;">'+inl(c)+'</td>'; }).join('')+'</tr>'; i++; }
+        h+='</tbody></table><p></p>'; continue;
+      }
+      if (/^#{1,6}\s+/.test(l)){ var lv=Math.min(l.match(/^#+/)[0].length+1,4); h+='<h'+lv+'>'+inl(l.replace(/^#+\s+/,''))+'</h'+lv+'>'; i++; continue; }
+      if (/^\s*([-*]|\d+\.)\s+/.test(l)){
+        var ord=/^\s*\d+\.\s+/.test(l), its=[];
+        while(i<L.length && /^\s*([-*]|\d+\.)\s+/.test(L[i])){ its.push(L[i].replace(/^\s*([-*]|\d+\.)\s+/,'')); i++; }
+        h+='<'+(ord?'ol':'ul')+'>'+its.map(function(t){ return '<li>'+inl(t)+'</li>'; }).join('')+'</'+(ord?'ol':'ul')+'>'; continue;
+      }
+      if (!l.trim()){ i++; continue; }
+      h+='<p>'+inl(l)+'</p>'; i++;
+    }
+    return h;
+  }
+  function mdToPlainText(text){
+    var L=String(text||'').split('\n'), out=[];
+    for (var i=0;i<L.length;i++){
+      var l=L[i];
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(l)) continue;
+      if (/^\s*\|.*\|\s*$/.test(l)) l=l.trim().replace(/^\||\|$/g,'').split('|').map(function(c){ return c.trim(); }).join('\t');
+      out.push(l.replace(/^#{1,6}\s+/,'').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1'));
+    }
+    return out.join('\n');
+  }
+  // Writes both formats. Apps that understand HTML (Google Docs, Word, Gmail) paste formatting and tables. Plain-text apps get tab-separated tables.
+  function copyFormatted(md, onDone, onFail){
+    var html=mdToClipHtml(md), plain=mdToPlainText(md);
+    // Method 1: a copy event that sets both formats. Runs inside the click, and works in Safari, in preview panes and in iframes.
+    try{
+      var handler=function(e){ e.clipboardData.setData('text/html','<meta charset="utf-8">'+html); e.clipboardData.setData('text/plain',plain); e.preventDefault(); };
+      document.addEventListener('copy',handler);
+      var ta=document.createElement('textarea'); ta.value=plain; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';
+      document.body.appendChild(ta); ta.select();
+      var ok=false; try{ ok=document.execCommand('copy'); }catch(err){ ok=false; }
+      document.removeEventListener('copy',handler); document.body.removeChild(ta);
+      if (ok){ onDone(); return; }
+    } catch(e1){}
+    // Method 2: the asynchronous clipboard API.
+    try{
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+        var item=new ClipboardItem({ 'text/html': new Blob(['<meta charset="utf-8">'+html],{type:'text/html'}), 'text/plain': new Blob([plain],{type:'text/plain'}) });
+        navigator.clipboard.write([item]).then(onDone,function(){ navigator.clipboard.writeText(plain).then(onDone,onFail); });
+        return;
+      }
+      navigator.clipboard.writeText(plain).then(onDone,onFail);
+    } catch(e2){ onFail(); }
+  }
+
+
+  function chatMdToHtml(text){
+    if(!text) return '';
+    var esc2 = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    var inline = function(s){
+      return esc2(s)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*]+)\*([^*]|$)/g, '$1<em>$2</em>$3')
+        .replace(/`([^`]+)`/g, '<code style="background:#F5E6E6;padding:1px 5px;border-radius:4px;font-size:.9em;">$1</code>');
+    };
+    var lines = text.split('\n');
+    var html = '', i = 0;
+    while (i < lines.length){
+      var line = lines[i];
+      if (/^\s*\|.*\|\s*$/.test(line) && lines[i+1] && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])){
+        var headerCells = line.trim().replace(/^\||\|$/g,'').split('|').map(function(c){ return c.trim(); });
+        var t = '<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;">' +
+          '<thead><tr>' + headerCells.map(function(c){ return '<th style="text-align:left;padding:6px 9px;border-bottom:2px solid var(--line);color:var(--ink-soft);">'+inline(c)+'</th>'; }).join('') + '</tr></thead><tbody>';
+        i += 2;
+        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){
+          var rowCells = lines[i].trim().replace(/^\||\|$/g,'').split('|').map(function(c){ return c.trim(); });
+          t += '<tr>' + rowCells.map(function(c){ return '<td style="padding:6px 9px;border-bottom:1px solid var(--line);">'+inline(c)+'</td>'; }).join('') + '</tr>';
+          i++;
+        }
+        html += t + '</tbody></table>';
+        continue;
+      }
+      if (/^#{1,3}\s+/.test(line)){
+        var level = line.match(/^#+/)[0].length;
+        var size = level===1?'15px':level===2?'14px':'13.5px';
+        html += '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;font-size:'+size+';margin:10px 0 4px;">'+inline(line.replace(/^#+\s+/,''))+'</div>';
+        i++; continue;
+      }
+      if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)){
+        var ordered = /^\s*\d+\.\s+/.test(line);
+        var items = [];
+        while (i < lines.length && (/^\s*[-*]\s+/.test(lines[i]) || /^\s*\d+\.\s+/.test(lines[i]))){
+          items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/,''));
+          i++;
+        }
+        var tag = ordered ? 'ol' : 'ul';
+        html += '<'+tag+' style="margin:6px 0;padding-left:19px;">' +
+          items.map(function(it){ return '<li style="margin-bottom:4px;line-height:1.5;">'+inline(it)+'</li>'; }).join('') +
+          '</'+tag+'>';
+        continue;
+      }
+      if (!line.trim()){ i++; continue; }
+      html += '<div style="margin:4px 0;line-height:1.5;">'+inline(line)+'</div>';
+      i++;
+    }
+    return html;
+  }
+
+  function renderChatMessages(){
+    var wrap = document.getElementById('chat-messages');
+    if (!wrap) return;
+    if (!chatHistory.length){
+      wrap.innerHTML = '<div class="chat-empty">Ask a question, or pick one above \u2014 for example, \u201cWhat does the data show about health insurance coverage gaps?\u201d</div>';
+      return;
+    }
+    wrap.innerHTML = chatHistory.map(function(m, idx){
+      var isUser = m.role === 'user';
+      var body = isUser
+        ? '<div style="white-space:pre-wrap;">'+esc(m.content)+'</div>'
+        : chatMdToHtml(m.content);
+      var copyBtn = isUser ? '' : '<div><button class="chat-copy" data-chat-copy="'+idx+'" title="Copies formatted text. Tables paste into Google Docs as real tables.">Copy answer</button></div>';
+      return '<div class="chat-msg-row '+(isUser?'user':'assistant')+'"><div class="chat-bubble '+(isUser?'user':'assistant')+'">'+body+copyBtn+'</div></div>';
+    }).join('');
+    wrap.querySelectorAll('[data-chat-copy]').forEach(function(b){ b.addEventListener('click', function(){
+      var m = chatHistory[parseInt(b.getAttribute('data-chat-copy'),10)]; if (!m) return;
+      var done = function(){ b.textContent='Copied'; setTimeout(function(){ b.textContent='Copy answer'; },1500); };
+      copyFormatted(m.content, done, function(){ b.textContent='Copy failed'; }); }); });
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  var CHAT_THINKING_PHRASES = ['Reading the indicator table\u2026','Checking the pipeline data\u2026','Putting the answer together\u2026'];
+  var chatThinkingInterval = null;
+  function showChatThinking(){
+    var wrap = document.getElementById('chat-messages'); if (!wrap) return;
+    var idx = 0;
+    var bubble = document.createElement('div');
+    bubble.id = 'chat-thinking-bubble';
+    bubble.className = 'chat-msg-row assistant';
+    bubble.innerHTML = '<div class="chat-bubble assistant thinking">'+CHAT_THINKING_PHRASES[0]+'</div>';
+    wrap.appendChild(bubble);
+    wrap.scrollTop = wrap.scrollHeight;
+    chatThinkingInterval = setInterval(function(){
+      idx = (idx+1) % CHAT_THINKING_PHRASES.length;
+      var el = document.getElementById('chat-thinking-bubble');
+      if (el) el.firstElementChild.textContent = CHAT_THINKING_PHRASES[idx];
+    }, 2200);
+  }
+  function hideChatThinking(){
+    if (chatThinkingInterval){ clearInterval(chatThinkingInterval); chatThinkingInterval=null; }
+    var el = document.getElementById('chat-thinking-bubble'); if (el) el.remove();
+  }
+  function setChatLoading(isLoading){
+    chatInFlight = isLoading;
+    var btn = document.getElementById('chat-send-btn'); if (!btn) return;
+    btn.disabled = isLoading;
+    btn.textContent = isLoading ? 'Thinking\u2026' : 'Send';
+    btn.style.opacity = isLoading ? '.6' : '1';
+  }
+  async function sendChatMessage(){
+    if (chatInFlight) return;
+    var input = document.getElementById('chat-input');
+    var text = input.value.trim();
+    if (!text) return;
+    chatHistory.push({role:'user', content:text});
+    input.value=''; input.style.height='auto';
+    renderChatMessages();
+    setChatLoading(true);
+    showChatThinking();
+    try{
+      var res = await fetch(CHAT_FUNCTION_URL, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+SUPABASE_KEY },
+        body: JSON.stringify({ message:text, history: chatHistory.slice(0,-1) })
+      });
+      if (!res.ok) throw new Error('Server responded '+res.status);
+      var data = await res.json();
+      chatHistory.push({role:'assistant', content: data.reply || 'Sorry, I didn\u2019t get a usable response back.'});
+    } catch(e){
+      chatHistory.push({role:'assistant', content:'Something went wrong reaching the assistant (' + e.message + '). Please try again.'});
+    } finally {
+      hideChatThinking();
+      setChatLoading(false);
+      renderChatMessages();
+    }
+  }
+  function wireChatInteractions(){
+    var input = document.getElementById('chat-input');
+    var btn = document.getElementById('chat-send-btn');
+    if (btn) btn.addEventListener('click', sendChatMessage);
+    if (input){
+      input.addEventListener('keydown', function(e){
+        if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChatMessage(); }
+      });
+      input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,120)+'px'; });
+    }
+    var toggle = document.getElementById('sourcesToggle');
+    if (toggle) toggle.addEventListener('click', function(){
+      sourcesExpanded = !sourcesExpanded;
+      var main = document.getElementById('main');
+      var scrollPos = document.getElementById('chat-messages') ? document.getElementById('chat-messages').scrollTop : 0;
+      main.innerHTML = renderAsk();
+      renderChatMessages();
+      wireChatInteractions();
+      var cm = document.getElementById('chat-messages'); if (cm) cm.scrollTop = scrollPos;
+    });
+  }
+
+  // ---------- NAP Workbook compliance tracker ----------
+  function renderNapWorkbook(){
+    var secs = STATE.napSections;
+    var shipped = secs.filter(function(s){ return s.in_final_nap; });
+    var prep = secs.filter(function(s){ return !s.in_final_nap; });
+    var pct = napProgressPct();
+    var byStatus = {};
+    shipped.forEach(function(s){ byStatus[s.status] = (byStatus[s.status]||0)+1; });
+
+    var html = '<div class="page-head"><div class="kicker">WJWI coaching workbook</div>';
+    html += '<h2>NAP Workbook Compliance</h2>';
+    html += '<div class="meta">Tracks every section the actual Neighborhood Action Plan document needs, against what WJWI\u2019s coaching workbook has asked for \u2014 separate from whether we\u2019ve delivered our own pipeline phases.</div></div>';
+
+    html += '<div class="stat-strip">';
+    html += statBlock('NAP document progress', pct+'<small>%</small>', shipped.length+' sections in the final document');
+    html += statBlock('Complete', (byStatus.complete||0), 'of '+shipped.length+' sections');
+    html += statBlock('Needs review', (byStatus.needs_review||0), 'drafted but not reviewed');
+    html += statBlock('Not started', (byStatus.not_started||0), 'no content exists yet');
+    html += '</div>';
+
+    html += '<h3 style="margin:26px 0 4px;">Sections of the final NAP document</h3>';
+    html += '<div class="meta" style="margin-bottom:14px;">These are the sections WJWI\u2019s workbook \u2014 and the Child First Authority example NAP \u2014 indicate the finished plan needs.</div>';
+    shipped.forEach(function(s){ html += renderNapCard(s); });
+
+    if (prep.length){
+      html += '<h3 style="margin:30px 0 4px;">Prep homework (not part of the final NAP document)</h3>';
+      html += '<div class="meta" style="margin-bottom:14px;">Exercises from the workbook that feed a section above, but are not themselves part of the final document.</div>';
+      prep.forEach(function(s){ html += renderNapCard(s); });
+    }
+
+    html += napLegend();
+    return html;
+  }
+
+  function napLegend(){
+    return '<footer class="legend">'+
+      '<div class="lk"><span class="sw not_started"></span>Not started</div>'+
+      '<div class="lk"><span class="sw in_progress" style="background:var(--amber)"></span>Drafted</div>'+
+      '<div class="lk"><span class="sw" style="background:var(--rust)"></span>Needs review</div>'+
+      '<div class="lk"><span class="sw done"></span>Complete</div>'+
+      '<div class="lk">Click the status dot to cycle through all four stages</div>'+
+      '</footer>';
+  }
+
+  function renderNapCard(s){
+    var html = '<div class="ms nap-'+s.status+'">';
+    html += '<div class="ms-row">';
+    html += '<button class="status-btn nap-status-btn" data-nap-cycle="'+s.id+'" title="Click to change status"></button>';
+    html += '<div class="ms-body">';
+    html += '<div class="ms-title-row"><div class="ms-title">'+esc(s.title)+(s.plain_explainer?' <span class="nap-info" tabindex="0" title="'+esc(s.plain_explainer)+'">i</span>':'')+'</div><span class="nap-status-tag nap-'+s.status+'">'+NAP_STATUS_LABEL[s.status]+'</span></div>';
+    html += '<div class="ms-sub">'+esc(s.description)+'</div>';
+    html += '<div class="ms-owner-row">'+ownerChip(s.owner)+'</div>';
+    if (s.evidence_ref && s.bot_question){
+      html += '<button class="nap-evidence nap-evidence-live" data-nap-ask="'+esc(s.bot_question)+'">' +
+        '<strong>Evidence we have:</strong> '+esc(s.evidence_ref) +
+        '<span class="nap-evidence-cta">Ask the evidence about this \u2192</span></button>';
+    } else if (s.evidence_ref){
+      html += '<div class="nap-evidence"><strong>Evidence we have:</strong> '+esc(s.evidence_ref)+'</div>';
+    }
+    var hasNapNote = !!(s.notes && s.notes.trim());
+    html += '<button class="note-toggle" data-nap-note-toggle="'+s.id+'">'+(napOpenNotes[s.id]?'Hide notes':'Notes')+(hasNapNote?'<span class="note-flag" title="Has saved notes"></span>':'')+'</button>';
+    if (napOpenNotes[s.id]){
+      html += '<div class="ms-detail">';
+      html += '<textarea data-nap-note-input="'+s.id+'" placeholder="Notes on this section\u2019s status...">'+esc(s.notes||'')+'</textarea>';
+      html += '<div class="note-save-row"><button class="note-save-btn" data-nap-note-save="'+s.id+'">Save</button></div>';
+      html += '</div>';
+    }
+    html += '</div></div></div>';
+    return html;
+  }
+
+  function cycleNapStatus(id){
+    var s = STATE.napSections.filter(function(x){ return x.id===id; })[0]; if (!s) return;
+    s.status = NAP_STATUS_ORDER[(NAP_STATUS_ORDER.indexOf(s.status)+1) % NAP_STATUS_ORDER.length];
+    renderAll();
+    persistNapSection(id, {status: s.status});
+  }
+  function persistNapSection(id, fields){
+    updateSaveIndicator('busy');
+    var body = Object.assign({}, fields, {updated_at: new Date().toISOString()});
+    fetch(SUPABASE_URL+'/rest/v1/casa_nap_workbook_sections?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:sbH, body: JSON.stringify(body)
+    }).then(function(res){
+      if (!res.ok) throw new Error('save failed');
+      updateSaveIndicator('ok');
+    }).catch(function(){ updateSaveIndicator('error'); });
+  }
+
+  // ---------- Printable work plan (standalone document built from the same STATE, for browser Print > Save as PDF) ----------
+  function printOwnerNames(owners){
+    return (owners||[]).map(function(k){ var o=OWNERS[k]; return o?o.label:k; }).join(', ');
+  }
+  function printMsBlock(s, m){
+    var html = '<div class="pw-ms">';
+    html += '<div class="pw-ms-head"><div class="pw-ms-title">'+esc(m.title)+(m.type==='decision'?'<span class="pw-decision-tag">Decision point</span>':'')+'</div>';
+    html += '<div class="pw-ms-date">'+fmtDate(m.date)+'</div></div>';
+    if (m.sub) html += '<div class="pw-ms-sub">'+esc(m.sub)+'</div>';
+    if (m.detail) html += '<div class="pw-ms-detail">'+esc(m.detail)+'</div>';
+    html += '<div class="pw-ms-row2">';
+    html += '<span class="pw-ms-status '+m.status+'">'+statusLabel(m.status)+'</span>';
+    if (m.owners && m.owners.length) html += '<span><b>Responsible:</b> '+esc(printOwnerNames(m.owners))+'</span>';
+    if (m.outputs && m.outputs.length) html += '<span><b>Deliverables:</b> '+esc(m.outputs.join(', '))+'</span>';
+    html += '</div>';
+    if (m.type==='decision' && m.decisionRecord) html += '<div class="pw-decision-record"><strong>Decision recorded</strong>'+esc(m.decisionRecord)+'</div>';
+    else if (m.notes) html += '<div class="pw-decision-record"><strong>Notes</strong>'+esc(m.notes)+'</div>';
+    html += '</div>';
+    return html;
+  }
+  function renderPrintWorkPlan(){
+    var allD = allMs();
+    var totalDeliv = allD.length, doneDeliv = allD.filter(function(x){ return x.m.status==='done'; }).length;
+    var overallPct = totalDeliv ? Math.round(doneDeliv/totalDeliv*100) : 0;
+    var bounds = scheduleBounds();
+    var curStage = STATE.stages.filter(function(s){ return !s.closedOn; })[0] || STATE.stages[STATE.stages.length-1];
+    var genDate = fmtDate(todayISO());
+
+    var html = '<div class="pw-page">';
+
+    html += '<div class="pw-cover">';
+    html += '<div class="pw-eyebrow">We Are CASA × Root Change</div>';
+    html += '<h1>Langley Park<br>Neighborhood Action Plan</h1>';
+    html += '<div class="pw-sub">Work Plan — Delivery Pipeline</div>';
+    html += '<div class="pw-meta">';
+    html += '<div>Prepared for the ENOUGH Initiative engagement between We Are CASA and Root Change</div>';
+    html += '<div>Engagement period: '+fmtDate(bounds.start)+' – '+fmtDate(bounds.end)+'</div>';
+    html += '<div>Generated '+genDate+'</div>';
+    html += '</div></div>';
+
+    html += '<div class="pw-summary">';
+    html += '<h2>Plan at a glance</h2>';
+    html += '<div class="pw-summary-grid">';
+    html += '<div><div class="pw-stat-label">Current stage</div><div class="pw-stat-value">'+esc(curStage.name)+' — '+esc(curStage.label)+'</div></div>';
+    html += '<div><div class="pw-stat-label">Overall progress</div><div class="pw-stat-value">'+overallPct+'% — '+doneDeliv+' of '+totalDeliv+' milestones done</div></div>';
+    html += '</div>';
+    html += '<table class="pw-phase-list"><thead><tr><th>Phase</th><th>Dates</th><th>Milestones</th><th>Status</th></tr></thead><tbody>';
+    STATE.stages.forEach(function(s){
+      var p = stageProgress(s);
+      html += '<tr><td>'+(s.num===0?'Mobilization':'Phase '+s.num)+' — '+esc(s.label)+'</td><td>'+esc(s.dates)+'</td><td>'+p.done+' / '+p.total+'</td><td>'+(s.closedOn?'Closed '+fmtDate(s.closedOn):(p.done>0?'In progress':'Not started'))+'</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '</div>';
+
+    STATE.stages.forEach(function(s){
+      html += '<div class="pw-phase">';
+      html += '<div class="pw-phase-head">';
+      html += '<div class="pw-phase-kicker">'+(s.num===0?'Mobilization':'Phase '+s.num+' of 4')+'</div>';
+      html += '<h2>'+esc(s.name)+' — '+esc(s.label)+'</h2>';
+      html += '<div class="pw-phase-dates">'+esc(s.dates)+'</div>';
+      html += '</div>';
+      if (s.closedOn){
+        html += '<div class="pw-closed"><strong>Phase closed</strong>Closed out '+fmtDate(s.closedOn)+(s.closedNote?' — '+esc(s.closedNote):'')+'</div>';
+      }
+      html += '<div class="pw-exit"><strong>This phase is complete when</strong>'+esc(s.exitTest)+'</div>';
+      s.milestones.forEach(function(m){ html += printMsBlock(s,m); });
+      html += '</div>';
+    });
+
+    html += '<div class="pw-footer">Langley Park Neighborhood Action Plan — Work Plan, generated '+genDate+' from the live delivery pipeline tracker. Statuses and dates reflect the pipeline as of generation and may have since changed.</div>';
+    html += '</div>';
+    return html;
+  }
+  function triggerPrintWorkPlan(){
+    document.getElementById('printArea').innerHTML = renderPrintWorkPlan();
+    window.print();
+  }
+
+  function renderStage(s){
+    if (!s){ currentTab='overview'; return renderOverview(); }
+    var p = stageProgress(s);
+    var html = '<button class="back-link" data-goto="overview">\u2190 Overview</button>';
+    html += '<div class="page-head"><div class="kicker">'+(s.num===0?'Mobilization':'Phase '+s.num+' of 4')+'</div>';
+    html += '<h2>'+esc(s.name)+' \u2014 '+esc(s.label)+'</h2><div class="meta">'+esc(s.dates)+'</div></div>';
+
+    html += '<div class="stage-meta-strip">';
+    html += '<div class="m"><div class="label">Milestones</div><div class="value">'+p.total+'</div></div>';
+    html += '<div class="m"><div class="label">Progress</div><div class="value">'+p.pct+'%<small style="font-size:12px;font-family:\'Open Sans\'"> \u00b7 '+p.done+'/'+p.total+'</small></div></div>';
+    html += '</div>';
+
+    html += '<div class="exit-test"><strong>Exit criteria:</strong> '+esc(s.exitTest)+'</div>';
+
+    s.milestones.forEach(function(m){
+      var flag = msFlag(m);
+      var isDecision = m.type==='decision';
+      html += '<div class="ms '+m.status+(isDecision?' decision':'')+'">';
+      html += '<div class="ms-row">';
+      html += '<button class="status-btn" data-cycle="'+m.id+'" title="Click to change status"></button>';
+      html += '<div class="ms-body">';
+      html += '<div class="ms-title-row"><div class="ms-title">'+esc(m.title)+'</div>'+(isDecision?'<span class="decision-tag">Decision</span>':'')+'</div>';
+      html += '<div class="ms-sub">'+esc(m.sub)+'</div>';
+      html += '<div class="ms-due'+(flag==='overdue'?' overdue-tag':(flag==='upcoming'?' upcoming-tag':''))+'">'+fmtDate(m.date)+(flag?' \u00b7 '+(flag==='overdue'?'overdue':'due soon'):'')+'</div>';
+      html += '<div class="ms-owner-row">'+m.owners.map(ownerChip).join('')+'</div>';
+      var hasMsNote = isDecision ? !!(m.decisionRecord && m.decisionRecord.trim()) : !!(m.notes && m.notes.trim());
+      html += '<button class="note-toggle" data-note-toggle="'+m.id+'">'+(openNotes[m.id]?'Hide detail':(isDecision?'Decision record & notes':'Detail & notes'))+(hasMsNote?'<span class="note-flag" title="Has saved notes"></span>':'')+'</button>';
+      if (openNotes[m.id]) html += renderMsDetail(m, isDecision);
+      html += '</div>';
+      html += '<div class="ms-right">'+(flag?'<span class="flag '+flag+'">'+(flag==='overdue'?'Overdue':'Due soon')+'</span>':'')+'</div>';
+      html += '</div></div>';
+    });
+
+    html += renderCloseout(s);
+    html += legend();
+    return html;
+  }
+
+  // ---------- Phase close-out (manual "we're moving to the next phase") ----------
+  function renderCloseout(s){
+    var idx = STATE.stages.indexOf(s);
+    var next = STATE.stages[idx+1];
+    var p = stageProgress(s);
+    var open = p.total - p.done;
+    var html = '<div class="closeout'+(s.closedOn?' closed':'')+'"><h3>Phase close-out</h3>';
+    if (s.closedOn){
+      html += '<div class="closeout-status">\u2713 Closed on '+fmtDate(s.closedOn)+'</div>';
+      if (open) html += '<div class="closeout-open">'+open+' milestone'+(open===1?'':'s')+' in this phase '+(open===1?'was':'were')+' still open at close-out and remain tracked above.</div>';
+      if (s.closedNote) html += '<div class="closeout-note">'+esc(s.closedNote)+'</div>';
+      html += '<button class="closeout-reopen" data-reopen-stage="'+s.id+'">Reopen this phase</button>';
+    } else {
+      html += '<p>Ready to move on? Closing this phase makes '+(next?esc(next.name):'the plan')+' the current stage. Any milestones still open here stay tracked on this page \u2014 nothing is deleted or marked done.</p>';
+      if (open) html += '<div class="closeout-open">'+open+' of '+p.total+' milestone'+(p.total===1?'':'s')+' in this phase '+(open===1?'is':'are')+' still open.</div>';
+      html += '<textarea id="closeout-note-'+s.id+'" placeholder="Optional close-out note \u2014 e.g. what carries over into the next phase, or why we\u2019re moving on now"></textarea>';
+      html += '<button class="note-save-btn" data-close-stage="'+s.id+'">'+(next ? 'Mark '+esc(s.name)+' complete \u2192 move to '+esc(next.name) : 'Mark '+esc(s.name)+' complete')+'</button>';
+    }
+    return html + '</div>';
+  }
+
+  function closeStage(id){
+    var s = findStage(id); if (!s) return;
+    var open = stageProgress(s).total - stageProgress(s).done;
+    if (open && !window.confirm(open+' milestone'+(open===1?' is':'s are')+' still open in '+s.name+'. They\u2019ll stay tracked on this page. Mark the phase complete anyway?')) return;
+    var ta = document.getElementById('closeout-note-'+id);
+    s.closedOn = todayISO();
+    s.closedNote = ta ? ta.value.trim() : '';
+    renderAll();
+    persistStage(id, {closed_on: s.closedOn, closed_note: s.closedNote});
+  }
+  function reopenStage(id){
+    var s = findStage(id); if (!s) return;
+    s.closedOn = null; s.closedNote = '';
+    renderAll();
+    persistStage(id, {closed_on: null, closed_note: null});
+  }
+
+  function renderMsDetail(m, isDecision){
+    var html = '<div class="ms-detail">';
+    html += '<p>'+esc(m.detail)+'</p>';
+    if (m.outputs.length){
+      html += '<div class="ms-outputs">';
+      m.outputs.forEach(function(o){ html += '<span class="out-tag">'+esc(o)+'</span>'; });
+      html += '</div>';
+    }
+    html += '<div class="note-area">';
+    if (isDecision){
+      html += '<label style="font-size:11px;color:var(--ink-soft);display:block;margin-bottom:4px;">Decision record \u2014 options considered, evidence used, rationale, approved by</label>';
+      html += '<textarea data-decision-input="'+m.id+'" placeholder="Options considered / Evidence used / Rationale / Approved by...">'+esc(m.decisionRecord)+'</textarea>';
+    } else {
+      html += '<label style="font-size:11px;color:var(--ink-soft);display:block;margin-bottom:4px;">Notes</label>';
+      html += '<textarea data-note-input="'+m.id+'" placeholder="Add a note...">'+esc(m.notes)+'</textarea>';
+    }
+    html += '<div class="note-save-row"><button class="note-save-btn" data-note-save="'+m.id+'">Save</button></div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function legend(){
+    return '<footer class="legend">'+
+      '<div class="lk"><span class="sw not_started"></span>Not started</div>'+
+      '<div class="lk"><span class="sw in_progress"></span>In progress</div>'+
+      '<div class="lk"><span class="sw done"></span>Done</div>'+
+      '<div class="lk">Overdue / due-soon flags check milestone dates against today automatically</div>'+
+      '</footer>';
+  }
+
+  function wireInteractions(){
+    document.querySelectorAll('[data-print-workplan]').forEach(function(el){
+      el.addEventListener('click', triggerPrintWorkPlan);
+    });
+    document.querySelectorAll('[data-goto]').forEach(function(el){
+      el.addEventListener('click', function(){ currentTab = el.getAttribute('data-goto'); renderAll(); });
+    });
+    document.querySelectorAll('[data-nap-ask]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        var q = el.getAttribute('data-nap-ask');
+        currentTab = 'ask';
+        renderAll();
+        var input = document.getElementById('chat-input');
+        if (input){ input.value = q; sendChatMessage(); }
+      });
+    });
+    document.querySelectorAll('[data-nap-cycle]').forEach(function(el){
+      el.addEventListener('click', function(e){ e.stopPropagation(); cycleNapStatus(el.getAttribute('data-nap-cycle')); });
+    });
+    document.querySelectorAll('[data-nap-note-toggle]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var id = el.getAttribute('data-nap-note-toggle');
+        napOpenNotes[id] = !napOpenNotes[id];
+        renderAll();
+      });
+    });
+    document.querySelectorAll('[data-nap-note-save]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var id = el.getAttribute('data-nap-note-save');
+        var s = STATE.napSections.filter(function(x){ return x.id===id; })[0]; if (!s) return;
+        var ta = document.querySelector('[data-nap-note-input="'+id+'"]');
+        if (ta){ s.notes = ta.value; persistNapSection(id, {notes: ta.value}); }
+        napOpenNotes[id] = false;
+        renderAll();
+      });
+    });
+    document.querySelectorAll('[data-close-stage]').forEach(function(el){
+      el.addEventListener('click', function(){ closeStage(el.getAttribute('data-close-stage')); });
+    });
+    document.querySelectorAll('[data-reopen-stage]').forEach(function(el){
+      el.addEventListener('click', function(){ reopenStage(el.getAttribute('data-reopen-stage')); });
+    });
+    document.querySelectorAll('[data-cycle]').forEach(function(el){
+      el.addEventListener('click', function(e){ e.stopPropagation(); cycleStatus(el.getAttribute('data-cycle')); });
+    });
+    document.querySelectorAll('[data-note-toggle]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var id = el.getAttribute('data-note-toggle');
+        openNotes[id] = !openNotes[id];
+        renderAll();
+      });
+    });
+    document.querySelectorAll('[data-note-save]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var id = el.getAttribute('data-note-save');
+        var r = findMs(id); if (!r) return;
+        var ta = document.querySelector('[data-note-input="'+id+'"], [data-decision-input="'+id+'"]');
+        if (ta){
+          if (r.m.type==='decision'){ r.m.decisionRecord = ta.value; persistMilestone(id, {decision_record: ta.value}); }
+          else { r.m.notes = ta.value; persistMilestone(id, {notes: ta.value}); }
+        }
+        openNotes[id] = false;
+        renderAll();
+      });
+    });
+  }
+
+  function cycleStatus(id){
+    var r = findMs(id); if (!r) return;
+    var order = ['not_started','in_progress','done'];
+    r.m.status = order[(order.indexOf(r.m.status)+1) % order.length];
+    renderAll();
+    persistMilestone(id, {status: r.m.status});
+  }
+
+  // ---------- Persistence (Supabase — shared across everyone who opens this file) ----------
+  function updateSaveIndicator(state){
+    var dot=document.getElementById('saveDot'), text=document.getElementById('saveText');
+    if (state==='busy'){ dot.className='dot busy'; text.textContent='Saving\u2026'; return; }
+    if (state==='error'){ dot.className='dot off'; text.textContent='Could not save \u2014 check connection'; return; }
+    dot.className='dot'; text.textContent='All changes saved';
+  }
+  function persistMilestone(id, fields){
+    updateSaveIndicator('busy');
+    var body = Object.assign({}, fields, {updated_at: new Date().toISOString()});
+    fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_milestones?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:sbH, body: JSON.stringify(body)
+    }).then(function(res){
+      if (!res.ok) throw new Error('save failed');
+      updateSaveIndicator('ok');
+    }).catch(function(){ updateSaveIndicator('error'); });
+  }
+
+  function persistStage(id, fields){
+    updateSaveIndicator('busy');
+    fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_stages?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:sbH, body: JSON.stringify(fields)
+    }).then(function(res){
+      if (!res.ok) throw new Error('save failed');
+      updateSaveIndicator('ok');
+    }).catch(function(){ updateSaveIndicator('error'); });
+  }
+
+  function exportData(){
+    var blob = new Blob([JSON.stringify(STATE,null,2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var stamp = new Date().toISOString().slice(0,10);
+    a.href=url; a.download='langley-park-pipeline-'+stamp+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  // Restores status/notes/decision records from a previous export back into
+  // Supabase (stage/milestone content itself is server-authoritative now).
+  function importData(file){
+    var reader = new FileReader();
+    reader.onload = async function(){
+      try{
+        var parsed = JSON.parse(reader.result);
+        if (!parsed || !parsed.stages) throw new Error('bad shape');
+        var writes = [];
+        parsed.stages.forEach(function(s){
+          writes.push(fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_stages?id=eq.'+encodeURIComponent(s.id), {
+            method:'PATCH', headers:sbH,
+            body: JSON.stringify({ closed_on: s.closedOn||null, closed_note: s.closedNote||null })
+          }));
+          (s.milestones||[]).forEach(function(m){
+            writes.push(fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_milestones?id=eq.'+encodeURIComponent(m.id), {
+              method:'PATCH', headers:sbH,
+              body: JSON.stringify({ status:m.status||'not_started', notes:m.notes||'', decision_record:m.decisionRecord||'', updated_at: new Date().toISOString() })
+            }));
+          });
+        });
+        (parsed.napSections||[]).forEach(function(n){
+          writes.push(fetch(SUPABASE_URL+'/rest/v1/casa_nap_workbook_sections?id=eq.'+encodeURIComponent(n.id), {
+            method:'PATCH', headers:sbH,
+            body: JSON.stringify({ status:n.status||'not_started', notes:n.notes||'', updated_at: new Date().toISOString() })
+          }));
+        });
+        await Promise.all(writes);
+        await loadState();
+        renderAll();
+      } catch(e){ window.alert('That file doesn\u2019t look like a pipeline export \u2014 nothing was changed.'); }
+    };
+    reader.readAsText(file);
+  }
+  function wireNavActions(){
+    document.getElementById('btnExport').addEventListener('click', exportData);
+    document.getElementById('fileImport').addEventListener('change', function(e){
+      if (e.target.files && e.target.files[0]) importData(e.target.files[0]);
+      e.target.value='';
+    });
+    document.getElementById('btnReset').addEventListener('click', async function(){
+      if (window.confirm('Reset all progress and notes back to the original scope for everyone? This can\u2019t be undone (export first if you want a backup).')){
+        updateSaveIndicator('busy');
+        var ids = STATE.stages.flatMap(function(s){ return s.milestones.map(function(m){ return m.id; }); });
+        try{
+          await Promise.all(ids.map(function(id){
+            return fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_milestones?id=eq.'+encodeURIComponent(id), {
+              method:'PATCH', headers:sbH,
+              body: JSON.stringify({ status:'not_started', notes:'', decision_record:'', updated_at: new Date().toISOString() })
+            });
+          }));
+          await Promise.all(STATE.stages.map(function(s){
+            return fetch(SUPABASE_URL+'/rest/v1/casa_pipeline_stages?id=eq.'+encodeURIComponent(s.id), {
+              method:'PATCH', headers:sbH, body: JSON.stringify({ closed_on:null, closed_note:null })
+            });
+          }));
+          await Promise.all(STATE.napSections.map(function(n){
+            return fetch(SUPABASE_URL+'/rest/v1/casa_nap_workbook_sections?id=eq.'+encodeURIComponent(n.id), {
+              method:'PATCH', headers:sbH, body: JSON.stringify({ status:'not_started', notes:'', updated_at: new Date().toISOString() })
+            });
+          }));
+          await loadState();
+          renderAll();
+          updateSaveIndicator('ok');
+        } catch(e){ updateSaveIndicator('error'); }
+      }
+    });
+  }
+
+
+  // ---------- Draft the NAP ----------
+  var DRAFT_FUNCTION_URL = SUPABASE_URL + '/functions/v1/casa-nap-draft';
+  var DRAFT = { loaded:false, qual:[], readiness:{}, drafts:{}, busy:{}, checking:false, err:'', notes:{}, ver:{}, assessedAt:null, storedFp:null };
+
+  function drDjb2(str){ var h=5381; for (var i=0;i<str.length;i++){ h=((h<<5)+h+str.charCodeAt(i))|0; } return (h>>>0).toString(36); }
+  function drFingerprint(){
+    var finals = STATE.napSections.filter(function(s){ return s.in_final_nap; }).slice().sort(function(a,b){
+      return (a.sort_order-b.sort_order) || (a.id<b.id?-1:(a.id>b.id?1:0)); });
+    var rh = drDjb2(finals.map(function(s){ return s.id+'|'+(s.evidence_categories||[]).join('+')+'|'+(s.quant_scope||'none'); }).join(';'));
+    return 'q'+DRAFT.qual.length+':'+rh;
+  }
+  async function loadDraftData(){
+    try{
+      var r1 = await fetch(SUPABASE_URL+'/rest/v1/casa_qualitative_evidence?select=id,category&limit=5000', {headers:sbH});
+      var r2 = await fetch(SUPABASE_URL+'/rest/v1/casa_nap_readiness?select=*', {headers:sbH});
+      var r3 = await fetch(SUPABASE_URL+'/rest/v1/casa_nap_drafts?select=*&order=version.desc', {headers:sbH});
+      if (!r1.ok || !r2.ok || !r3.ok) throw new Error('Could not load drafting data');
+      DRAFT.qual = await r1.json();
+      DRAFT.readiness = {}; DRAFT.storedFp = null; DRAFT.assessedAt = null;
+      (await r2.json()).forEach(function(r){ DRAFT.readiness[r.section_id]=r;
+        if (!DRAFT.assessedAt || r.assessed_at > DRAFT.assessedAt){ DRAFT.assessedAt=r.assessed_at; DRAFT.storedFp=r.evidence_fingerprint; } });
+      DRAFT.drafts = {};
+      (await r3.json()).forEach(function(d){ (DRAFT.drafts[d.section_id]=DRAFT.drafts[d.section_id]||[]).push(d); });
+      DRAFT.loaded = true;
+    } catch(e){ DRAFT.err = e.message; }
+  }
+  async function callDraftFn(payload){
+    var res = await fetch(DRAFT_FUNCTION_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+SUPABASE_KEY }, body:JSON.stringify(payload) });
+    var data = {}; try{ data = await res.json(); }catch(e){}
+    if (!res.ok || data.error) throw new Error(data.error || ('The drafting service returned an error ('+res.status+')'));
+    return data;
+  }
+  async function runReadinessCheck(){
+    DRAFT.checking = true; DRAFT.err=''; renderAll();
+    try{ await callDraftFn({mode:'assess'}); await loadDraftData(); }
+    catch(e){ DRAFT.err = 'The readiness check did not finish: '+e.message; }
+    DRAFT.checking = false; renderAll();
+  }
+  async function runDraft(id){
+    DRAFT.busy[id]=true; DRAFT.err=''; renderAll();
+    try{
+      var note = (DRAFT.notes[id]||'').trim();
+      var out = await callDraftFn({mode:'draft', section_id:id, reviewer_note:note});
+      (DRAFT.drafts[id] = DRAFT.drafts[id]||[]).unshift(out.draft);
+      DRAFT.ver[id] = 0;
+    } catch(e){ DRAFT.err = 'The draft did not finish: '+e.message; }
+    DRAFT.busy[id]=false; renderAll();
+  }
+  var DR_LABEL = { ready:'Ready to draft', partial:'Partly ready', not_enough:'Not enough yet', unchecked:'Not checked yet' };
+
+  function renderDraftCard(s){
+    var r = DRAFT.readiness[s.id], rating = r ? r.rating : 'unchecked';
+    var cats = s.evidence_categories||[];
+    var qn = DRAFT.qual.filter(function(q){ return cats.indexOf(q.category)>-1; }).length;
+    var counts = r && r.evidence_counts ? r.evidence_counts : null;
+    var scope = s.quant_scope||'none';
+    var qt = (scope!=='none' && counts) ? ' · '+counts.indicators+(scope==='geography'?' area labels':' indicator rows') : '';
+    var h = '<div class="dr-card '+rating+'"><div class="dr-head"><div class="dr-title">'+esc(s.title)+'</div><span class="dr-chip '+rating+'">'+DR_LABEL[rating]+'</span></div>';
+    h += '<div class="dr-counts">'+qn+' community / process evidence item'+(qn===1?'':'s')+qt+(cats.length?' · from: '+esc(cats.join(', ')):(scope==='none'?' · no evidence sources linked yet':''))+'</div>';
+    if (r){
+      h += '<div class="dr-sum">'+esc(r.summary||'')+'</div><div class="dr-cols">';
+      if ((r.covered||[]).length) h += '<div><h5>We can already write about</h5><ul>'+r.covered.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+      if ((r.missing||[]).length) h += '<div><h5>Still needed</h5><ul>'+r.missing.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+      h += '</div>';
+    }
+    var busy = !!DRAFT.busy[s.id], blocked = DRAFT.checking || busy;
+    var label = busy ? 'Drafting… (up to a minute)' : (rating==='not_enough' ? 'Draft anyway (mostly placeholders)' : (rating==='unchecked' ? 'Draft this section' : 'Draft this section'));
+    h += '<div class="dr-actions"><input type="text" maxlength="600" placeholder="Optional instruction, e.g. keep it under 200 words" data-dr-note="'+esc(s.id)+'" value="'+esc(DRAFT.notes[s.id]||'')+'">' +
+      '<button class="'+(rating==='not_enough'?'dr-btn-alt':'note-save-btn')+(blocked?' dr-disabled':'')+'" data-dr-draft="'+esc(s.id)+'">'+label+'</button></div>';
+    var list = DRAFT.drafts[s.id]||[];
+    if (list.length){
+      var vi = Math.min(DRAFT.ver[s.id]||0, list.length-1), d = list[vi];
+      h += '<div class="dr-draft"><div class="dr-meta"><strong>Draft v'+d.version+'</strong><span>'+esc(fmtDate(String(d.created_at).slice(0,10)))+'</span>';
+      if (list.length>1) h += '<select data-dr-ver="'+esc(s.id)+'">'+list.map(function(x,i){ return '<option value="'+i+'"'+(i===vi?' selected':'')+'>v'+x.version+'</option>'; }).join('')+'</select>';
+      h += '<button class="dr-btn-alt" data-dr-copy="'+esc(s.id)+'">Copy text</button></div>';
+      if (d.reviewer_note) h += '<div class="dr-meta">Instruction used: “'+esc(d.reviewer_note)+'”</div>';
+      h += '<div class="dr-body">'+chatMdToHtml(d.body_md)+'</div>';
+      if ((d.needs_confirmation||[]).length) h += '<div class="dr-confirm"><strong>Please confirm before using</strong><ul>'+d.needs_confirmation.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+      if ((d.sources_used||[]).length) h += '<details class="dr-meta"><summary>Evidence this draft used ('+d.sources_used.length+')</summary><ul style="margin:6px 0 0;padding-left:17px;">'+d.sources_used.map(function(x){return '<li>'+esc(x.label||x.tag)+'</li>';}).join('')+'</ul></details>';
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+
+  function renderDraftTab(){
+    var finals = STATE.napSections.filter(function(s){ return s.in_final_nap; });
+    var cnt = {ready:0,partial:0,not_enough:0,unchecked:0};
+    finals.forEach(function(s){ var r=DRAFT.readiness[s.id]; cnt[r?r.rating:'unchecked']++; });
+    var stale = DRAFT.loaded && DRAFT.storedFp && DRAFT.storedFp !== drFingerprint();
+    var usedCats = {}; finals.forEach(function(s){ (s.evidence_categories||[]).forEach(function(c){ usedCats[c]=1; }); });
+    var un = {}; DRAFT.qual.forEach(function(q){ if (!usedCats[q.category]) un[q.category]=(un[q.category]||0)+1; });
+    var unList = Object.keys(un);
+    var h = '<div class="page-head"><div class="kicker">From evidence to text</div><h2>Draft the NAP</h2><div class="meta">Checks whether the evidence we have uploaded is enough to write each section of the plan, then drafts it in the voice of a Neighborhood Action Plan. Every draft is for the team to review and edit before it goes into the Google Doc.</div></div>';
+    if (DRAFT.err) h += '<div class="dr-err">'+esc(DRAFT.err)+'</div>';
+    if (stale) h += '<div class="dr-banner"><strong>Evidence has changed since the last check.</strong> Run the check again so the ratings below reflect what is uploaded now.</div>';
+    h += '<div class="stat-strip"><div class="stat"><div class="label">Ready to draft</div><div class="value">'+cnt.ready+'</div></div><div class="stat"><div class="label">Partly ready</div><div class="value">'+cnt.partial+'</div></div><div class="stat"><div class="label">Not enough yet</div><div class="value">'+cnt.not_enough+'</div></div><div class="stat"><div class="label">Not checked</div><div class="value">'+cnt.unchecked+'</div></div></div>';
+    h += '<div class="dr-actions" style="margin:0 0 16px;"><button class="note-save-btn'+(DRAFT.checking?' dr-disabled':'')+'" data-dr-check>'+(DRAFT.checking?'Checking… (up to a minute)':(DRAFT.assessedAt?'Re-check readiness':'Check readiness'))+'</button>' +
+      '<span class="dr-counts">'+(DRAFT.assessedAt?'Last checked '+esc(new Date(DRAFT.assessedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})):'Not checked yet')+'</span></div>';
+    if (!DRAFT.loaded && !DRAFT.err) h += '<div class="dr-counts">Loading…</div>';
+    else h += finals.map(renderDraftCard).join('');
+    if (unList.length) h += '<div class="dr-note"><strong>Uploaded evidence not linked to any section yet:</strong> '+unList.map(function(c){return esc(c)+' ('+un[c]+')';}).join(', ')+'. Let Root Change know which section these belong in and they can be linked.</div>';
+    h += '<div class="dr-note">Drafts use only the evidence linked to each section, and anything missing is marked <em>[CASA to confirm: …]</em>. Running a check or a draft uses the AI service, so please use them when you need them.</div>';
+    return h;
+  }
+
+  function wireDraftTab(){
+    var c = document.querySelector('[data-dr-check]'); if (c) c.addEventListener('click', function(){ if (!DRAFT.checking) runReadinessCheck(); });
+    document.querySelectorAll('[data-dr-draft]').forEach(function(b){ b.addEventListener('click', function(){
+      var id=b.getAttribute('data-dr-draft'); if (!DRAFT.busy[id] && !DRAFT.checking) runDraft(id); }); });
+    document.querySelectorAll('[data-dr-note]').forEach(function(i){ i.addEventListener('input', function(){ DRAFT.notes[i.getAttribute('data-dr-note')] = i.value; }); });
+    document.querySelectorAll('[data-dr-ver]').forEach(function(sel){ sel.addEventListener('change', function(){ DRAFT.ver[sel.getAttribute('data-dr-ver')] = parseInt(sel.value,10); renderAll(); }); });
+    document.querySelectorAll('[data-dr-copy]').forEach(function(b){ b.addEventListener('click', function(){
+      var id=b.getAttribute('data-dr-copy'), list=DRAFT.drafts[id]||[], d=list[Math.min(DRAFT.ver[id]||0,list.length-1)]; if(!d) return;
+      var done=function(){ b.textContent='Copied'; setTimeout(function(){ b.textContent='Copy text'; },1500); };
+      copyFormatted(d.body_md, done, function(){}); }); });
+  }
+
+
+  // ---------- Evidence Needs (shopping list) ----------
+  var DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1vagnhXe2lTg0u8osy0AzUGPYn6AgoozJ';
+  var NEEDS = { loaded:false, items:[], view:'phase', hideCovered:false, owner:'all', stype:'all', err:'', copied:false, open:{}, draft:{}, flash:{} };
+  var NEED_KIND = {
+    data:     { title:'Indicator data', blurb:'Numbers and statistics, usually from the ENOUGH data hub or the Census. These become the figures cited in the plan.' },
+    voice:    { title:'Community voice', blurb:'What residents and partners said in workshops and listening sessions, in their own words.' },
+    document: { title:'Documents and write-ups', blurb:'Records, lists, histories and plans we need on file so the text can cite a source.' },
+    decision: { title:'Decisions to make', blurb:'Choices the team or partners have to settle. Nothing can be uploaded for these, but the plan cannot be finished without them.' }
+  };
+  var NEED_SOURCE = {
+    public_record:          { label:'Public record', icon:'🏛', cls:'pub', tip:'Published data or records anyone can look up, such as the Census or the ENOUGH data hub.' },
+    community_consultation: { label:'Community consultation', icon:'💬', cls:'com', tip:'Comes from asking residents or partners directly, such as workshops, listening sessions or interviews.' },
+    partner_record:         { label:'Partner records', icon:'📄', cls:'par', tip:'Documents held by CASA or other partner organizations.' },
+    team_decision:          { label:'Team decision', icon:'⚖', cls:'dec', tip:'A choice the team or partners need to make. There is no document to collect.' }
+  };
+  var NEED_OWNERS = { evan:'Evan', angela:'Angela' };
+  var NEED_STATUS_LABEL = { covered:'Have it', partial:'Partly', missing:'Needed' };
+
+  async function loadNeeds(){
+    try{
+      var r = await fetch(SUPABASE_URL+'/rest/v1/casa_nap_need_coverage?select=*&order=section_id.asc,sort_order.asc', {headers:sbH});
+      if (!r.ok) throw new Error('Could not load the evidence checklist');
+      NEEDS.items = await r.json(); NEEDS.loaded = true; NEEDS.err='';
+    } catch(e){ NEEDS.err = e.message; }
+  }
+  function needHasMatcher(n){ return (n.match_categories||[]).length>0 || n.match_result_area || n.match_indicator_like; }
+  function needRecalc(n){
+    if (n.done) return 'covered';
+    if (!needHasMatcher(n)) return 'missing';
+    var c=(n.qual_count||0)+(n.quant_count||0);
+    return c>=n.min_count ? 'covered' : (c>0 ? 'partial' : 'missing');
+  }
+  function needSection(id){ return STATE.napSections.filter(function(x){ return x.id===id; })[0]; }
+  function secInfo(sec){ return sec && sec.plain_explainer ? ' <span class="nap-info" tabindex="0" title="'+esc(sec.plain_explainer)+'">i</span>' : ''; }
+  function needFind(id){ return NEEDS.items.filter(function(x){ return String(x.id)===String(id); })[0]; }
+  function safeUrl(u){ return /^https?:\/\//i.test(u||'') ? u : ''; }
+  function needDraftVal(n, field){ var d=NEEDS.draft[n.id]; return (d && d[field]!==undefined) ? d[field] : (n[field]||''); }
+
+  function renderNeedItem(n, showSection){
+    var sec = needSection(n.section_id), src = NEED_SOURCE[n.source_type];
+    var cls = n.done ? 'received' : n.status;
+    var chip = n.done ? '<span class="dr-chip ready">Received</span>' : '<span class="dr-chip '+(n.status==='covered'?'ready':(n.status==='partial'?'partial':'not_enough'))+'">'+NEED_STATUS_LABEL[n.status]+'</span>';
+    var h = '<div class="nd-item '+cls+'"><div class="nd-top">'+chip+'<span class="nd-label">'+esc(n.label)+'</span>';
+    if (src) h += '<span class="nd-badge '+src.cls+'" title="'+esc(src.tip)+'">'+src.icon+' '+esc(src.label)+'</span>';
+    h += '<span class="nd-owner'+(n.assignee?'':' none')+'">'+(n.assignee?esc(NEED_OWNERS[n.assignee]):'Unassigned')+'</span></div>';
+    if (showSection && sec) h += '<div class="nd-for">For: '+esc(sec.title)+secInfo(sec)+'</div>';
+    if (n.question) h += '<div class="nd-question"><strong>Question:</strong> '+esc(n.question)+'</div>';
+    if (n.detail) h += '<div class="nd-detail">'+esc(n.detail)+'</div>';
+    if (n.source_hint) h += '<div class="nd-meta"><strong>Where to look:</strong> '+esc(n.source_hint)+'</div>';
+    if (needHasMatcher(n)){
+      var c=(n.qual_count||0)+(n.quant_count||0);
+      h += '<div class="nd-meta">'+c+' matching item'+(c===1?'':'s')+' uploaded so far · we aim for at least '+n.min_count+'</div>';
+    }
+    if (n.confusion) h += '<div class="nd-confusion"><strong>Possible confusion:</strong> '+esc(n.confusion)+'</div>';
+    if (n.caution) h += '<div class="nd-caution"><strong>Check before using:</strong> '+esc(n.caution)+'</div>';
+    var url = safeUrl(n.drive_url);
+    if (url) h += '<div class="nd-meta"><a href="'+esc(url)+'" target="_blank" rel="noopener">🔗 Open the document or folder</a></div>';
+    if (n.notes && !NEEDS.open[n.id]) h += '<div class="nd-notes-view">'+esc(n.notes)+'</div>';
+    if (NEEDS.flash[n.id]) h += '<div class="nd-flash">'+esc(NEEDS.flash[n.id])+'</div>';
+    // controls
+    h += '<div class="nd-actions"><label class="nd-sel">Assigned to <select data-nd-assign="'+n.id+'"><option value="">Unassigned</option><option value="evan"'+(n.assignee==='evan'?' selected':'')+'>Evan</option><option value="angela"'+(n.assignee==='angela'?' selected':'')+'>Angela</option></select></label>' +
+      '<button class="dr-btn-alt" data-nd-toggle="'+n.id+'">'+(NEEDS.open[n.id]?'Close link and notes':((n.drive_url||n.notes)?'Edit link and notes':'Add link and notes'))+'</button>';
+    if (n.done) h += '<button class="dr-btn-alt" data-nd-undo="'+n.id+'">Undo “received”</button>';
+    else if (n.status!=='covered') h += '<button class="dr-btn-alt" data-nd-done="'+n.id+'" title="Use this when the document is on file but cannot be matched automatically">Mark as received</button>';
+    h += '</div>';
+    if (NEEDS.open[n.id]){
+      h += '<div class="nd-edit"><label>Link to the document or Drive folder<input type="url" placeholder="https://drive.google.com/…" data-nd-link="'+n.id+'" value="'+esc(needDraftVal(n,'drive_url'))+'"></label>' +
+        '<div><button class="dr-btn-alt" data-nd-usefolder="'+n.id+'">Use the shared project folder link</button></div>' +
+        '<label>Notes<textarea rows="3" placeholder="Where it came from, what is still missing, who to ask…" data-nd-notes="'+n.id+'">'+esc(needDraftVal(n,'notes'))+'</textarea></label>' +
+        '<div><button class="note-save-btn" data-nd-save="'+n.id+'">Save link and notes</button></div></div>';
+    }
+    return h + '</div>';
+  }
+
+  function needsVisible(){
+    return NEEDS.items.filter(function(n){
+      if (NEEDS.hideCovered && n.status==='covered') return false;
+      if (NEEDS.owner==='unassigned' && n.assignee) return false;
+      if (NEEDS.owner==='evan' && n.assignee!=='evan') return false;
+      if (NEEDS.owner==='angela' && n.assignee!=='angela') return false;
+      if (NEEDS.stype!=='all' && n.source_type!==NEEDS.stype) return false;
+      return true;
+    });
+  }
+  function needStages(){ return STATE.stages.filter(function(s){ return NEEDS.items.some(function(n){ return n.phase_id===s.id; }); }); }
+  function needSecOrder(id){ var s=needSection(id); return s?s.sort_order:999; }
+  function needSortInPhase(a,b){
+    var ao = a.status==='covered'?1:0, bo = b.status==='covered'?1:0;
+    return (ao-bo) || (needSecOrder(a.section_id)-needSecOrder(b.section_id)) || (a.sort_order-b.sort_order);
+  }
+  function needCell(x){ return String(x==null?'':x).replace(/\|/g,'/').replace(/\s*\n\s*/g,' ').trim(); }
+  function needStatusText(n){ return n.done ? 'Received' : NEED_STATUS_LABEL[n.status]; }
+  function needFlagText(n){
+    var f=[]; if (n.confusion) f.push(n.confusion); if (n.caution) f.push('Check the data: '+n.caution);
+    return f.join(' ') || 'None noted';
+  }
+  function needRow(n, withSection){
+    var sec=needSection(n.section_id), src=NEED_SOURCE[n.source_type];
+    var ln=[]; if (n.drive_url) ln.push(n.drive_url); if (n.notes) ln.push(n.notes);
+    return '| '+[ needCell(n.question||n.label), needCell(sec?sec.title:''), needStatusText(n), needCell(n.source_hint||''), needCell(needFlagText(n)), needCell(ln.join(' \u2014 ')) ].join(' | ')+' |';
+  }
+  var NEED_TABLE_HEAD = '| Question to answer | Section | Status | Where to look | Flag: possible confusion | Link and notes |\n|---|---|---|---|---|---|';
+  // The list is built as a Markdown table so it pastes into Google Docs as real tables.
+  function needsPlainText(){
+    var items = needsVisible(), out=['# Langley Park NAP: Evidence Needs ('+fmtDate(todayISO())+')',''];
+    var block=function(title, g){ if (!g.length) return; out.push('## '+title,'',NEED_TABLE_HEAD); g.forEach(function(n){ out.push(needRow(n)); }); out.push(''); };
+    if (NEEDS.view==='phase'){
+      needStages().forEach(function(st){
+        block(st.name+' ('+st.dates+'): '+st.label, items.filter(function(n){ return n.phase_id===st.id; }).sort(needSortInPhase));
+      });
+    } else if (NEEDS.view==='type'){
+      Object.keys(NEED_KIND).forEach(function(k){ block(NEED_KIND[k].title, items.filter(function(n){ return n.kind===k; })); });
+    } else {
+      STATE.napSections.filter(function(x){ return x.in_final_nap; }).forEach(function(sec){ block(sec.title, items.filter(function(n){ return n.section_id===sec.id; })); });
+    }
+    return out.join('\n').trim();
+  }
+
+  function renderNeedsTab(){
+    var all = NEEDS.items;
+    var h = '<div class="page-head"><div class="kicker">What we need to gather</div><h2>Evidence Needs</h2><div class="meta">A checklist of the evidence each section of the plan calls for. Items turn green on their own when matching data or workshop notes are uploaded. For documents and decisions, assign an owner, add a link and notes, and mark the item as received once it is on file.</div><div style="margin-top:10px;"><a class="dr-btn-alt" href="'+DRIVE_FOLDER_URL+'" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none;">\uD83D\uDCC1 Open the shared Drive folder</a></div></div>';
+    if (NEEDS.err) h += '<div class="dr-err">'+esc(NEEDS.err)+'</div>';
+    if (!NEEDS.loaded && !NEEDS.err) return h + '<div class="dr-counts">Loading…</div>';
+    var cnt = {covered:0, partial:0, missing:0}; all.forEach(function(n){ cnt[n.status]++; });
+    h += '<div class="stat-strip"><div class="stat"><div class="label">Have it</div><div class="value">'+cnt.covered+'</div></div><div class="stat"><div class="label">Partly</div><div class="value">'+cnt.partial+'</div></div><div class="stat"><div class="label">Still needed</div><div class="value">'+cnt.missing+'</div></div><div class="stat"><div class="label">Total items</div><div class="value">'+all.length+'</div></div></div>';
+    h += '<div class="nd-bar"><span><button class="nd-toggle first'+(NEEDS.view==='phase'?' active':'')+'" data-nd-view="phase">By phase</button><button class="nd-toggle mid'+(NEEDS.view==='section'?' active':'')+'" data-nd-view="section">By section</button><button class="nd-toggle last'+(NEEDS.view==='type'?' active':'')+'" data-nd-view="type">By type of data</button></span>' +
+      '<button class="dr-btn-alt" data-nd-copy style="margin-left:auto;">'+(NEEDS.copied?'Copied':'Copy this list')+'</button></div>';
+    h += '<div class="nd-bar"><label>Owner <select data-nd-owner><option value="all"'+(NEEDS.owner==='all'?' selected':'')+'>Everyone</option><option value="evan"'+(NEEDS.owner==='evan'?' selected':'')+'>Evan</option><option value="angela"'+(NEEDS.owner==='angela'?' selected':'')+'>Angela</option><option value="unassigned"'+(NEEDS.owner==='unassigned'?' selected':'')+'>Unassigned</option></select></label>' +
+      '<label>Evidence type <select data-nd-stype><option value="all">All types</option>'+Object.keys(NEED_SOURCE).map(function(k){ return '<option value="'+k+'"'+(NEEDS.stype===k?' selected':'')+'>'+esc(NEED_SOURCE[k].label)+'</option>'; }).join('')+'</select></label>' +
+      '<label><input type="checkbox" data-nd-hide'+(NEEDS.hideCovered?' checked':'')+'> Hide items we already have</label></div>';
+    var items = needsVisible();
+    if (NEEDS.hideCovered || NEEDS.owner!=='all' || NEEDS.stype!=='all') h += '<div class="dr-counts" style="margin-bottom:10px;">Showing '+items.length+' of '+all.length+' items. <a href="#" data-nd-reset>Show everything</a></div>';
+    if (!items.length) { h += '<div class="dr-counts">No items match these filters.</div>'; return h; }
+    if (NEEDS.view==='phase'){
+      needStages().forEach(function(st){
+        var mine = all.filter(function(n){ return n.phase_id===st.id; });
+        var g = items.filter(function(n){ return n.phase_id===st.id; }).sort(needSortInPhase); if (!g.length) return;
+        var have = mine.filter(function(n){ return n.status==='covered'; }).length;
+        h += '<div class="nd-group"><h3>'+esc(st.name)+' · '+esc(st.dates)+'</h3><div class="nd-blurb">'+esc(st.label)+' — '+have+' of '+mine.length+' items in place</div>' + g.map(function(n){ return renderNeedItem(n,true); }).join('') + '</div>';
+      });
+    } else if (NEEDS.view==='type'){
+      Object.keys(NEED_KIND).forEach(function(k){
+        var g = items.filter(function(n){ return n.kind===k; }); if (!g.length) return;
+        h += '<div class="nd-group"><h3>'+esc(NEED_KIND[k].title)+' ('+g.length+')</h3><div class="nd-blurb">'+esc(NEED_KIND[k].blurb)+'</div>' + g.map(function(n){ return renderNeedItem(n,true); }).join('') + '</div>';
+      });
+    } else {
+      STATE.napSections.filter(function(x){ return x.in_final_nap; }).forEach(function(sec){
+        var mine = all.filter(function(n){ return n.section_id===sec.id; });
+        var g = items.filter(function(n){ return n.section_id===sec.id; }); if (!g.length) return;
+        var have = mine.filter(function(n){ return n.status==='covered'; }).length;
+        h += '<div class="nd-group"><h3>'+esc(sec.title)+secInfo(sec)+'</h3><div class="nd-prog">'+have+' of '+mine.length+' items in place</div>' + g.map(function(n){ return renderNeedItem(n,false); }).join('') + '</div>';
+      });
+    }
+    return h;
+  }
+
+  function persistNeed(id, fields){
+    updateSaveIndicator('busy');
+    return fetch(SUPABASE_URL+'/rest/v1/casa_nap_evidence_needs?id=eq.'+id, { method:'PATCH', headers:sbH, body:JSON.stringify(fields) })
+      .then(function(res){ if (!res.ok) throw new Error('save failed'); updateSaveIndicator('ok'); return true; })
+      .catch(function(){ updateSaveIndicator('error'); return false; });
+  }
+  // Apply a change locally, save it, and put it back with a visible message if the save fails.
+  function changeNeed(id, fields, okMsg){
+    var n = needFind(id); if (!n) return;
+    var before = {}; Object.keys(fields).forEach(function(k){ before[k]=n[k]; n[k]=fields[k]; });
+    n.status = needRecalc(n); NEEDS.err=''; NEEDS.flash[id]=''; renderAll();
+    persistNeed(id, fields).then(function(ok){
+      if (!ok){ Object.keys(before).forEach(function(k){ n[k]=before[k]; }); n.status=needRecalc(n); NEEDS.flash[id]='That change did not save, so it was put back. Please try again.'; }
+      else { NEEDS.flash[id]=okMsg||''; delete NEEDS.draft[id]; setTimeout(function(){ if (NEEDS.flash[id]===okMsg){ NEEDS.flash[id]=''; if (currentTab==='needs') renderAll(); } }, 3000); }
+      if (currentTab==='needs') renderAll();
+    });
+  }
+  function wireNeedsTab(){
+    document.querySelectorAll('[data-nd-view]').forEach(function(b){ b.addEventListener('click', function(){ NEEDS.view=b.getAttribute('data-nd-view'); NEEDS.copied=false; renderAll(); }); });
+    var o = document.querySelector('[data-nd-hide]'); if (o) o.addEventListener('change', function(){ NEEDS.hideCovered=o.checked; renderAll(); });
+    var ow = document.querySelector('[data-nd-owner]'); if (ow) ow.addEventListener('change', function(){ NEEDS.owner=ow.value; renderAll(); });
+    var st = document.querySelector('[data-nd-stype]'); if (st) st.addEventListener('change', function(){ NEEDS.stype=st.value; renderAll(); });
+    var rs = document.querySelector('[data-nd-reset]'); if (rs) rs.addEventListener('click', function(e){ e.preventDefault(); NEEDS.hideCovered=false; NEEDS.owner='all'; NEEDS.stype='all'; renderAll(); });
+    document.querySelectorAll('[data-nd-assign]').forEach(function(sel){ sel.addEventListener('change', function(){
+      changeNeed(sel.getAttribute('data-nd-assign'), { assignee: sel.value || null }, sel.value ? 'Assigned to '+NEED_OWNERS[sel.value]+'.' : 'Unassigned.'); }); });
+    document.querySelectorAll('[data-nd-toggle]').forEach(function(b){ b.addEventListener('click', function(){ var id=b.getAttribute('data-nd-toggle'); NEEDS.open[id]=!NEEDS.open[id]; renderAll(); }); });
+    document.querySelectorAll('[data-nd-link]').forEach(function(i){ i.addEventListener('input', function(){ var id=i.getAttribute('data-nd-link'); (NEEDS.draft[id]=NEEDS.draft[id]||{}).drive_url=i.value; }); });
+    document.querySelectorAll('[data-nd-usefolder]').forEach(function(b){ b.addEventListener('click', function(){
+      var id=b.getAttribute('data-nd-usefolder'); (NEEDS.draft[id]=NEEDS.draft[id]||{}).drive_url=DRIVE_FOLDER_URL;
+      var i=document.querySelector('[data-nd-link="'+id+'"]'); if (i) i.value=DRIVE_FOLDER_URL; }); });
+    document.querySelectorAll('[data-nd-notes]').forEach(function(i){ i.addEventListener('input', function(){ var id=i.getAttribute('data-nd-notes'); (NEEDS.draft[id]=NEEDS.draft[id]||{}).notes=i.value; }); });
+    document.querySelectorAll('[data-nd-save]').forEach(function(b){ b.addEventListener('click', function(){
+      var id=b.getAttribute('data-nd-save'), n=needFind(id), d=NEEDS.draft[id]||{};
+      var link=(d.drive_url!==undefined?d.drive_url:(n.drive_url||'')).trim(), notes=(d.notes!==undefined?d.notes:(n.notes||'')).trim();
+      if (link && !safeUrl(link)){ NEEDS.flash[id]='The link needs to start with https://'; renderAll(); return; }
+      NEEDS.open[id]=false; changeNeed(id, { drive_url: link||null, notes: notes||null }, 'Saved.'); }); });
+    document.querySelectorAll('[data-nd-done]').forEach(function(b){ b.addEventListener('click', function(){
+      changeNeed(b.getAttribute('data-nd-done'), { done:true, done_at:new Date().toISOString() }, 'Marked as received. You can undo this any time.'); }); });
+    document.querySelectorAll('[data-nd-undo]').forEach(function(b){ b.addEventListener('click', function(){
+      changeNeed(b.getAttribute('data-nd-undo'), { done:false, done_at:null }, 'Back to its automatic status.'); }); });
+    var c = document.querySelector('[data-nd-copy]'); if (c) c.addEventListener('click', function(){
+      copyFormatted(needsPlainText(), function(){ NEEDS.copied=true; renderAll(); }, function(){ NEEDS.err='Copy did not work in this browser.'; renderAll(); }); });
+  }
+
+  async function init(){
+    try{
+      await loadState();
+      renderAll();
+      wireNavActions();
+      updateSaveIndicator('ok');
+      loadDataSources().then(function(){ if (currentTab==='ask') renderAll(); });
+      loadDraftData().then(function(){ if (currentTab==='draft') renderAll(); });
+      loadNeeds().then(function(){ if (currentTab==='needs') renderAll(); });
+    } catch(e){
+      document.getElementById('main').innerHTML =
+        '<div style="padding:40px;color:var(--rust)">Could not load the pipeline (' + esc(e.message) + '). Check your connection and reload.</div>';
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>
